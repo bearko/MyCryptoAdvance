@@ -23,7 +23,7 @@ export const TACTIC = {
 export const HEROES = {
   player:     { id: 'player', name: '？？？', imageId: 12001, faction: FACTION.HERO,
     baseStats: { maxHp: 200, phy: 28, int: 15, agi: 50, atkSpeed: 1.2, atkRange: 40 },
-    atkType: 'melee', atkPattern: 'slash', growthRate: { maxHp: 20, phy: 4, int: 2, agi: 3 } },
+    atkType: 'none', atkPattern: 'none', growthRate: { maxHp: 20, phy: 4, int: 2, agi: 3 } },
 
   mitsunari:  { id: 'mitsunari', name: '石田三成', imageId: 2012, faction: FACTION.HERO,
     baseStats: { maxHp: 300, phy: 35, int: 55, agi: 35, atkSpeed: 0.8, atkRange: 100 },
@@ -92,17 +92,20 @@ export const STAGE_WAVES = {
     duration: 300,
     bgm: 'pve.mp3',
     fieldSize: 2000,
+    totalEnemies: 252,
     waves: [
-      { time: 0,   enemies: ['creeper_s'], count: 8,  interval: 0.8 },
-      { time: 15,  enemies: ['creeper_s', 'creeper_t'], count: 12, interval: 0.6 },
-      { time: 35,  enemies: ['elk_s', 'creeper_t'], count: 15, interval: 0.5 },
-      { time: 55,  enemies: ['heart_s', 'melissa_s', 'elk_s'], count: 18, interval: 0.45 },
+      // spawnDir: [centerAngle, spread] in radians — 0=right, -PI/2=up, PI/2=down, PI=left
+      // 序盤は前方(上方向)から。徐々に広がる
+      { time: 0,   enemies: ['creeper_s'], count: 8,  interval: 0.8, spawnDir: [-Math.PI/2, 0.4] },
+      { time: 15,  enemies: ['creeper_s', 'creeper_t'], count: 12, interval: 0.6, spawnDir: [-Math.PI/2, 0.6] },
+      { time: 35,  enemies: ['elk_s', 'creeper_t'], count: 15, interval: 0.5, spawnDir: [-Math.PI/2, 0.8] },
+      { time: 55,  enemies: ['heart_s', 'melissa_s', 'elk_s'], count: 18, interval: 0.45, spawnDir: [-Math.PI/2, 1.0] },
       { time: 75,  event: 'rescue', heroKey: 'kaihime' },
-      { time: 80,  enemies: ['creeper_g', 'elk_t', 'melissa_s'], count: 20, interval: 0.4 },
-      { time: 110, enemies: ['heart_t', 'melissa_t', 'elk_g'], count: 22, interval: 0.35 },
+      { time: 80,  enemies: ['creeper_g', 'elk_t', 'melissa_s'], count: 20, interval: 0.4, spawnDir: [-Math.PI/2, 1.2] },
+      { time: 110, enemies: ['heart_t', 'melissa_t', 'elk_g'], count: 22, interval: 0.35, spawnDir: [-Math.PI/2, 1.5] },
       { time: 140, event: 'rescue', heroKey: 'ranmaru' },
-      { time: 145, enemies: ['creeper_v', 'bandit_s', 'melissa_g'], count: 25, interval: 0.3 },
-      { time: 180, enemies: ['bandit_t', 'elk_g', 'heart_g', 'bagel_s'], count: 28, interval: 0.28 },
+      { time: 145, enemies: ['creeper_v', 'bandit_s', 'melissa_g'], count: 25, interval: 0.3, spawnDir: [-Math.PI/2, 2.0] },
+      { time: 180, enemies: ['bandit_t', 'elk_g', 'heart_g', 'bagel_s'], count: 28, interval: 0.28, spawnDir: [-Math.PI/2, 2.5] },
       { time: 215, event: 'rescue', heroKey: 'yukimura' },
       { time: 220, enemies: ['creeper_f', 'melissa_f', 'bandit_t'], count: 20, interval: 0.3 },
       { time: 260, enemies: ['elk_f', 'bandit_f', 'melissa_f', 'bagel_v'], count: 15, interval: 0.35 },
@@ -147,7 +150,9 @@ export const DIALOGUES = {
     { speaker: '石田三成', text: 'あの化物どもは「侵略者」の先兵。\nこの世界を喰らい尽くそうとしている。', portrait: 'mitsunari' },
     { speaker: '石田三成', text: 'お主にも戦う力があるはずだ。\n我と共に戦ってくれ！', portrait: 'mitsunari' },
   ],
-  battle_start: [
+  get_katana: [
+    { speaker: '石田三成', text: 'これを使え。', portrait: 'mitsunari' },
+    { speaker: '', text: 'ノービスカタナを手に入れた！' },
     { speaker: '石田三成', text: '来るぞ！　構えろ！', portrait: 'mitsunari' },
   ],
   rescue_kaihime: [

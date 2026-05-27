@@ -87,7 +87,7 @@ async function runPrologue() {
   renderer.clear();
   await transition('black'); await sleep(300); await transition('unblack');
 
-  await dialogue.show(DIALOGUES.battle_start);
+  await dialogue.show(DIALOGUES.get_katana);
 }
 
 async function runSurvivalBattle() {
@@ -100,7 +100,7 @@ async function runSurvivalBattle() {
     hp: $('hudHpFill'), hpText: $('hudHpText'),
     xpBar: $('hudXpFill'), level: $('hudLevel'),
     timer: $('hudTimer'), kills: $('hudKills'),
-    allies: $('hudAllies'),
+    remaining: $('hudRemaining'), allies: $('hudAllies'),
   };
 
   engine = new GameEngine(gameCanvas, hud);
@@ -115,6 +115,7 @@ async function runSurvivalBattle() {
 
   const party = [HEROES.player, HEROES.mitsunari];
   engine.initStage('sekigahara_field', party);
+  engine.equipWeapon('melee', 'slash', 10);
 
   audio.playBgm('pve.mp3');
 
