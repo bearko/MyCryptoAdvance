@@ -1,22 +1,15 @@
 /* ============================================================
-   main.js — game entry, scene orchestration, stage loop
+   main.js — game flow: prologue → survival battle → results
    ============================================================ */
 
-import { ASSETS, HEROES, ENEMIES, EXTENSIONS, STAGE_NODES, NODE_CONNECTIONS, DIALOGUES, SWARM_ENEMY_IDS } from './constants.js';
-import { gameState } from './state.js';
+import { ASSETS, HEROES, TACTIC, LEVELUP_CHOICES, DIALOGUES, SWARM_ENEMY_IDS } from './constants.js';
 import { DialogueSystem } from './dialogue.js';
-import { BattleSystem } from './battle.js';
+import { GameEngine } from './engine.js';
+import { Controls } from './controls.js';
 import { SceneRenderer, transition, screenShake, flashWhite, sleep } from './effects.js';
-import { MapSystem } from './map.js';
-import { MenuSystem } from './menu.js';
 import { audio } from './audio.js';
 
-const dialogue = new DialogueSystem();
-const battle = new BattleSystem();
-const renderer = new SceneRenderer();
-const map = new MapSystem();
-const menu = new MenuSystem();
-
+let dialogue, renderer, engine, controls;
 const $ = id => document.getElementById(id);
 
 async function preloadImages(urls) {
@@ -26,11 +19,7 @@ async function preloadImages(urls) {
   await Promise.all(urls.map(url =>
     new Promise(resolve => {
       const img = new Image();
-      img.onload = img.onerror = () => {
-        loaded++;
-        if (bar) bar.style.width = `${(loaded / total) * 100}%`;
-        resolve();
-      };
+      img.onload = img.onerror = () => { loaded++; if (bar) bar.style.width = `${(loaded / total) * 100}%`; resolve(); };
       img.src = url;
     })
   ));
@@ -38,12 +27,11 @@ async function preloadImages(urls) {
 
 async function init() {
   const heroImages = Object.values(HEROES).map(h => ASSETS.hero(h.imageId));
-  const enemyImages = [...new Set(Object.values(ENEMIES).map(e => ASSETS.enemy(e.imageId)))];
-  const extImages = Object.values(EXTENSIONS).map(e => ASSETS.extension(e.id));
+  const enemyIds = [101,102,103,104,106,111,112,113,116,121,122,123,131,132,133,136,161,162,166,181,184];
+  const enemyImages = enemyIds.map(id => ASSETS.enemy(id));
   const swarmImages = SWARM_ENEMY_IDS.map(id => ASSETS.enemy(id));
-  const bgImages = [ASSETS.background(1001)];
 
-  await preloadImages([...heroImages, ...enemyImages.slice(0, 15), ...extImages.slice(0, 6), ...swarmImages, ...bgImages]);
+  await preloadImages([...heroImages, ...enemyImages, ...swarmImages]);
 
   const splash = $('splash');
   splash.style.opacity = '0';
@@ -58,266 +46,210 @@ async function startGame() {
   $('titleScreen').classList.add('hidden');
   $('gameContainer').classList.remove('hidden');
 
+  dialogue = new DialogueSystem();
+  renderer = new SceneRenderer();
   audio._ensureCtx();
 
-  gameState.reset();
-  gameState.addHero('player');
-  gameState.addHero('mitsunari');
-
-  $('btnParty').addEventListener('click', () => menu.showPartyStatus());
-  $('btnEquip').addEventListener('click', () => menu.showEquipMenu());
-  $('btnMute').addEventListener('click', () => {
-    const muted = audio.toggleMute();
-    $('btnMute').textContent = muted ? '🔇' : '🔊';
-  });
-
   await runPrologue();
-  await runStageLoop();
+  await runSurvivalBattle();
 }
 
 async function runPrologue() {
-  await scene_falling();
-  await transition('black');
-  await scene_awakening();
-  await scene_mitsunari();
-
-  gameState.completeNode('landing');
-}
-
-async function scene_falling() {
   renderer.clear();
   renderer.drawSky();
   await sleep(800);
-
   const sz = Math.min(96, window.innerWidth * 0.2);
-  renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), sz, { className: 'sprite--fall', id: 'player-sprite', offsetY: -30 });
+  renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), sz, { className: 'sprite--fall', offsetY: -30 });
   await sleep(1200);
   await dialogue.show(DIALOGUES.scene1_fall);
   renderer.clear();
-}
 
-async function scene_awakening() {
+  await transition('black');
   renderer.clear();
   await transition('unblack');
   renderer.drawGrassland();
   await sleep(600);
-
-  const sz = Math.min(80, window.innerWidth * 0.16);
-  renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), sz, { id: 'player-ground', offsetY: 20 });
+  renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), Math.min(80, window.innerWidth * 0.16), { offsetY: 20 });
   await dialogue.show(DIALOGUES.scene2_awaken);
 
-  screenShake();
-  await sleep(300);
+  screenShake(); await sleep(300);
   renderer.addEnemySwarm(SWARM_ENEMY_IDS, ASSETS.enemy);
-  await sleep(500);
-  flashWhite();
-  await sleep(300);
-
+  await sleep(500); flashWhite(); await sleep(300);
   await dialogue.show(DIALOGUES.scene2_enemies);
-  await transition('black');
-  await sleep(500);
-  renderer.clear();
-}
 
-async function scene_mitsunari() {
+  await transition('black'); await sleep(500); renderer.clear();
   await transition('unblack');
-  renderer.drawGrassland();
-  await sleep(300);
-
-  flashWhite();
-  screenShake();
-  await sleep(200);
-
-  const sz = Math.min(96, window.innerWidth * 0.2);
-  renderer.addSpriteCenter(ASSETS.hero(HEROES.mitsunari.imageId), sz, { className: 'sprite--bounce', offsetY: -30 });
+  renderer.drawGrassland(); await sleep(300);
+  flashWhite(); screenShake(); await sleep(200);
+  renderer.addSpriteCenter(ASSETS.hero(HEROES.mitsunari.imageId), Math.min(96, window.innerWidth * 0.2), { className: 'sprite--bounce', offsetY: -30 });
   await sleep(600);
-
   await dialogue.show(DIALOGUES.scene3_mitsunari);
   renderer.clear();
-  await transition('black');
-  await sleep(300);
-  await transition('unblack');
+  await transition('black'); await sleep(300); await transition('unblack');
+
+  await dialogue.show(DIALOGUES.battle_start);
 }
 
-async function runStageLoop() {
-  while (true) {
-    $('mapHud').classList.remove('hidden');
-    const node = await map.show();
-    $('mapHud').classList.add('hidden');
+async function runSurvivalBattle() {
+  $('sceneLayer').classList.add('hidden');
+  $('battleHud').classList.remove('hidden');
 
-    await processNode(node);
+  const gameCanvas = $('gameCanvas');
+  const hud = {
+    hp: $('hudHpFill'), hpText: $('hudHpText'),
+    xpBar: $('hudXpFill'), level: $('hudLevel'),
+    timer: $('hudTimer'), kills: $('hudKills'),
+    allies: $('hudAllies'),
+  };
 
-    if (node.id === 'sekigahara' && gameState.isNodeCompleted('sekigahara')) {
-      await showChapterComplete();
-      break;
+  engine = new GameEngine(gameCanvas, hud);
+  controls = new Controls($('gameContainer'));
+
+  const spriteEntries = [];
+  Object.values(HEROES).forEach(h => spriteEntries.push([`hero_${h.imageId}`, ASSETS.hero(h.imageId)]));
+  [101,102,103,104,106,111,112,113,116,121,122,123,131,132,133,136,161,162,166,181,184].forEach(id =>
+    spriteEntries.push([`enemy_${id}`, ASSETS.enemy(id)])
+  );
+  await engine.loadSprites(spriteEntries);
+
+  const party = [HEROES.player, HEROES.mitsunari];
+  engine.initStage('sekigahara_field', party);
+
+  audio.playBgm('pve.mp3');
+
+  let tacticIndex = 1;
+  const tactics = [TACTIC.AGGRESSIVE, TACTIC.BALANCED, TACTIC.DEFENSIVE];
+  $('btnTactic').textContent = tactics[tacticIndex].name;
+  $('btnTactic').addEventListener('click', () => {
+    tacticIndex = (tacticIndex + 1) % tactics.length;
+    engine.setTactic(tactics[tacticIndex]);
+    $('btnTactic').textContent = tactics[tacticIndex].name;
+    audio.playSe('select');
+  });
+
+  $('btnPause').addEventListener('click', () => {
+    if (engine.paused) { engine.resume(); $('btnPause').textContent = '⏸'; }
+    else { engine.pause(); $('btnPause').textContent = '▶'; }
+  });
+
+  engine.onLevelUp = (level) => {
+    showLevelUpChoices(level);
+  };
+
+  engine.onRescue = async (heroKey) => {
+    const heroDef = HEROES[heroKey];
+    if (!heroDef) return;
+    engine.addAlly(heroDef);
+    const dlgKey = `rescue_${heroKey}`;
+    if (DIALOGUES[dlgKey]) {
+      engine.pause();
+      await dialogue.show(DIALOGUES[dlgKey]);
+      engine.resume();
     }
+  };
+
+  engine.onBoss = (wave) => {
+    engine.spawnBoss(wave);
+  };
+
+  const result = await new Promise(resolve => {
+    engine.onVictory = (stats) => resolve({ victory: true, ...stats });
+    engine.onDefeat = () => resolve({ victory: false, kills: engine.kills, level: engine.level, time: engine.stageTime });
+
+    const updateLoop = () => {
+      if (!engine.running && !engine.paused) return;
+      engine.input = controls.update();
+      requestAnimationFrame(updateLoop);
+    };
+
+    engine.start();
+    updateLoop();
+  });
+
+  await audio.fadeBgm(1000);
+  $('battleHud').classList.add('hidden');
+  controls.destroy();
+  $('sceneLayer').classList.remove('hidden');
+
+  if (result.victory) {
+    audio.playSe('victory');
+    renderer.clear();
+    renderer.drawGrassland();
+    await dialogue.show(DIALOGUES.battle_victory);
+    renderer.clear();
+    await showChapterComplete(result);
+  } else {
+    audio.playSe('defeat');
+    await showDefeatScreen(result);
   }
 }
 
-async function processNode(node) {
-  const introKey = getDialogueKey(node.id, 'intro');
-  if (introKey && DIALOGUES[introKey]) {
-    renderer.clear();
-    renderer.drawGrassland();
-    await dialogue.show(DIALOGUES[introKey]);
-    renderer.clear();
+function showLevelUpChoices(level) {
+  const overlay = $('levelUpOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = '';
+
+  const card = document.createElement('div');
+  card.className = 'levelup-card';
+  card.innerHTML = `<h2 class="levelup-title">LEVEL UP! — Lv.${level}</h2><div class="levelup-choices"></div>`;
+
+  const choices = [];
+  const pool = [...LEVELUP_CHOICES];
+  for (let i = 0; i < 3 && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    choices.push(pool.splice(idx, 1)[0]);
   }
 
-  if (node.recruit) {
-    const hero = gameState.addHero(node.recruit);
-    if (hero) {
-      audio.playSe('item');
-    }
-  }
-
-  if (node.type === 'camp') {
-    gameState.healAll();
-    await menu.showEquipMenu();
-  }
-
-  if (node.type === 'treasure' && !node.enemies) {
-    if (!gameState.isNodeCompleted(node.id)) {
-      if (node.reward && node.reward.type === 'extension') gameState.addExtension(node.reward.key);
-      if (node.itemReward) gameState.addItem(node.itemReward.key, node.itemReward.qty);
-    }
-    await menu.showReward(node);
-    gameState.completeNode(node.id);
-    return;
-  }
-
-  if (node.type === 'battle' && node.enemies) {
-    if (node.id === 'first_clash' && DIALOGUES.first_clash_intro) {
-      await dialogue.show(DIALOGUES.first_clash_intro);
-    }
-
-    const allyUnits = gameState.party.filter(h => h.stats.hp > 0).map(h => gameState.toBattleUnit(h));
-    const victory = await battle.start(allyUnits, node.enemies, 1001);
-
-    if (victory) {
-      gameState.syncFromBattle(battle.allies);
-      await handleRewards(node);
-    } else {
-      gameState.healAll();
-      return;
-    }
-  }
-
-  if (node.type === 'boss' && node.waves) {
-    await runBossBattle(node);
-    return;
-  }
-
-  const victoryKey = getDialogueKey(node.id, 'victory');
-  if (victoryKey && DIALOGUES[victoryKey]) {
-    renderer.clear();
-    renderer.drawGrassland();
-    await dialogue.show(DIALOGUES[victoryKey]);
-    renderer.clear();
-  }
-
-  gameState.completeNode(node.id);
-}
-
-async function runBossBattle(node) {
-  for (let w = 0; w < node.waves.length; w++) {
-    if (w > 0 && DIALOGUES.sekigahara_wave2) {
-      await dialogue.show(DIALOGUES.sekigahara_wave2);
-    }
-
-    const allyUnits = gameState.party.filter(h => h.stats.hp > 0).map(h => gameState.toBattleUnit(h));
-    const victory = await battle.start(allyUnits, node.waves[w], 1001);
-
-    if (victory) {
-      gameState.syncFromBattle(battle.allies);
-      if (w < node.waves.length - 1) {
-        gameState.party.forEach(h => {
-          h.stats.hp = Math.min(gameState.getMaxHp(h), h.stats.hp + Math.floor(h.stats.maxHp * 0.3));
-        });
-      }
-    } else {
-      gameState.healAll();
-      return;
-    }
-  }
-
-  await handleRewards(node);
-
-  if (DIALOGUES.sekigahara_victory) {
-    renderer.clear();
-    renderer.drawGrassland();
-
-    const sz = Math.min(72, window.innerWidth * 0.14);
-    const centerX = window.innerWidth / 2;
-    const positions = [-80, 0, 80, -40];
-    gameState.party.forEach((hero, i) => {
-      renderer.addSprite(ASSETS.hero(hero.imageId), centerX + (positions[i] || 0) - sz / 2, window.innerHeight * 0.4, sz, {});
+  const choicesEl = card.querySelector('.levelup-choices');
+  choices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'btn levelup-btn';
+    btn.innerHTML = `<span class="levelup-btn__name">${choice.name}</span><span class="levelup-btn__desc">${choice.desc}</span>`;
+    btn.addEventListener('click', () => {
+      audio.playSe('levelup');
+      overlay.classList.add('hidden');
+      engine.applyLevelUp(choice);
     });
+    choicesEl.appendChild(btn);
+  });
 
-    await dialogue.show(DIALOGUES.sekigahara_victory);
-    renderer.clear();
-  }
-
-  gameState.completeNode(node.id);
+  overlay.appendChild(card);
 }
 
-async function handleRewards(node) {
-  if (!gameState.isNodeCompleted(node.id)) {
-    if (node.reward && node.reward.type === 'extension') gameState.addExtension(node.reward.key);
-    if (node.reward && node.reward.type === 'item') gameState.addItem(node.reward.key, node.reward.qty);
-    if (node.itemReward) gameState.addItem(node.itemReward.key, node.itemReward.qty);
-  }
-
-  if (node.xpReward) {
-    const levelUps = gameState.addXp(node.xpReward);
-    await menu.showReward(node);
-    if (levelUps.length > 0) {
-      await menu.showLevelUp(levelUps);
-    }
-  }
-}
-
-async function showChapterComplete() {
-  await transition('black');
-  renderer.clear();
-  await sleep(800);
-  await transition('unblack');
-
-  audio.fadeBgm(2000);
+async function showChapterComplete(result) {
+  await transition('black'); await sleep(500); await transition('unblack');
 
   const container = $('gameContainer');
   container.innerHTML = `
     <div class="chapter-complete">
-      <div class="chapter-complete__title">第一章　完</div>
-      <div class="chapter-complete__sub">「関ヶ原の戦い」</div>
-      <div class="chapter-complete__party"></div>
-      <div class="chapter-complete__members"></div>
-      <div class="chapter-complete__text">
-        石田三成、甲斐姫、森蘭丸が仲間になった！<br>
-        時空を超える冒険はまだ始まったばかり——
+      <div class="chapter-complete__title">STAGE CLEAR</div>
+      <div class="chapter-complete__sub">第一章「関ヶ原の戦い」</div>
+      <div class="chapter-complete__stats">
+        <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
+        <div class="stat-item"><span class="stat-label">到達レベル</span><span class="stat-value">Lv.${result.level}</span></div>
+        <div class="stat-item"><span class="stat-label">生存時間</span><span class="stat-value">${Math.floor(result.time / 60)}:${Math.floor(result.time % 60).toString().padStart(2, '0')}</span></div>
       </div>
-      <button class="title-screen__press chapter-complete__btn" onclick="location.reload()">最初から</button>
+      <div class="chapter-complete__text">
+        クリプトワールドでの冒険は始まったばかり——<br>
+        新たな時代と英雄が待っている
+      </div>
+      <button class="title-screen__press chapter-complete__btn" onclick="location.reload()">もう一度プレイ</button>
       <div class="chapter-complete__tbc">To be continued...</div>
     </div>`;
-
-  const partyEl = container.querySelector('.chapter-complete__members');
-  gameState.party.forEach(hero => {
-    const img = document.createElement('img');
-    img.src = ASSETS.hero(hero.imageId);
-    img.className = 'chapter-complete__hero';
-    img.alt = hero.name;
-    img.draggable = false;
-    partyEl.appendChild(img);
-
-    const nameEl = document.createElement('div');
-    nameEl.className = 'chapter-complete__hero-name';
-    nameEl.textContent = `${hero.name} Lv.${hero.level}`;
-    partyEl.appendChild(nameEl);
-  });
 }
 
-function getDialogueKey(nodeId, suffix) {
-  const key = `${nodeId}_${suffix}`;
-  return DIALOGUES[key] ? key : null;
+async function showDefeatScreen(result) {
+  const container = $('gameContainer');
+  container.innerHTML = `
+    <div class="chapter-complete" style="--accent: var(--damage);">
+      <div class="chapter-complete__title" style="color: var(--damage);">DEFEATED</div>
+      <div class="chapter-complete__sub">力尽きた…</div>
+      <div class="chapter-complete__stats">
+        <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
+        <div class="stat-item"><span class="stat-label">到達レベル</span><span class="stat-value">Lv.${result.level}</span></div>
+      </div>
+      <button class="title-screen__press chapter-complete__btn" onclick="location.reload()">リトライ</button>
+    </div>`;
 }
 
 document.addEventListener('DOMContentLoaded', init);

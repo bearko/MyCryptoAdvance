@@ -3,23 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-<meta name="theme-color" content="#121018" />
+<meta name="theme-color" content="#0c0a14" />
 <title>MyCryptoAdvance — 時空英雄譚</title>
 <meta property="og:title" content="MyCryptoAdvance — 時空英雄譚" />
-<meta property="og:description" content="様々な時代にタイムスリップし、歴史上の偉人と共に戦うRPG" />
-<meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary_large_image" />
+<meta property="og:description" content="クリプトワールドで歴史の英雄と共に戦え" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%2250%22 font-size=%2256%22>⚔</text></svg>" />
 <link rel="stylesheet" href="css/base.css" />
 <link rel="stylesheet" href="css/layout.css" />
 <link rel="stylesheet" href="css/game.css" />
-<link rel="stylesheet" href="css/battle.css" />
-<link rel="stylesheet" href="css/ui.css" />
 <link rel="stylesheet" href="css/responsive.css" />
 </head>
 <body>
 
-<!-- Splash -->
 <div id="splash" class="splash">
   <div class="splash__logo">MyCryptoAdvance</div>
   <div class="splash__sub">時空英雄譚</div>
@@ -27,41 +22,51 @@
   <div class="splash__progress"><div class="splash__bar"></div></div>
 </div>
 
-<!-- Title -->
 <section id="titleScreen" class="title-screen hidden">
   <h1 class="title-screen__title">MyCryptoAdvance</h1>
   <p class="title-screen__sub">時空英雄譚</p>
-  <p class="title-screen__desc">様々な時代にタイムスリップし<br>歴史上の偉人と共に戦え</p>
+  <p class="title-screen__desc">クリプトワールドで<br>歴史の英雄と共に侵略者を打ち倒せ</p>
   <button id="btnPressStart" class="title-screen__press">TAP TO START</button>
 </section>
 
-<!-- Game Container -->
 <main id="gameContainer" class="game-container hidden">
-
-  <!-- Scene Layer -->
+  <!-- Scene Layer (prologue) -->
   <div id="sceneLayer" class="scene-layer">
     <canvas id="sceneCanvas" class="scene-canvas"></canvas>
     <div id="characterLayer" class="character-layer"></div>
     <div id="effectLayer" class="effect-layer"></div>
   </div>
 
-  <!-- Map Layer -->
-  <div id="mapLayer" class="map-layer hidden">
-    <div class="map-header">
-      <div class="map-title" id="mapTitle">第一章 — 関ヶ原の戦い</div>
+  <!-- Game Canvas (survival battle) -->
+  <canvas id="gameCanvas" class="game-canvas hidden"></canvas>
+
+  <!-- Battle HUD -->
+  <div id="battleHud" class="battle-hud hidden">
+    <div class="hud-top">
+      <div class="hud-hp">
+        <div class="hud-hp__bar"><div class="hud-hp__fill" id="hudHpFill"></div></div>
+        <span class="hud-hp__text" id="hudHpText">200 / 200</span>
+      </div>
+      <div class="hud-xp">
+        <span class="hud-xp__lv" id="hudLevel">Lv.1</span>
+        <div class="hud-xp__bar"><div class="hud-xp__fill" id="hudXpFill"></div></div>
+      </div>
     </div>
-    <div class="map-field">
-      <canvas id="mapCanvas" class="map-canvas"></canvas>
-      <div class="map-nodes" id="mapNodes"></div>
+    <div class="hud-center">
+      <span class="hud-timer" id="hudTimer">5:00</span>
+    </div>
+    <div class="hud-stats">
+      <span class="hud-kills" id="hudKills">0 KILLS</span>
+      <span class="hud-allies" id="hudAllies">×2</span>
+    </div>
+    <div class="hud-controls">
+      <button class="hud-btn-tactic" id="btnTactic">バランスよく</button>
+      <button class="hud-btn-pause" id="btnPause">⏸</button>
     </div>
   </div>
 
-  <!-- Map HUD -->
-  <div id="mapHud" class="map-hud hidden">
-    <button class="hud-btn" id="btnParty" title="パーティ">👥</button>
-    <button class="hud-btn" id="btnEquip" title="装備">⚔</button>
-    <button class="hud-btn" id="btnMute" title="音量">🔊</button>
-  </div>
+  <!-- Level Up Overlay -->
+  <div id="levelUpOverlay" class="levelup-overlay hidden"></div>
 
   <!-- Dialogue Layer -->
   <div id="dialogueLayer" class="dialogue-layer hidden">
@@ -74,25 +79,6 @@
       <div class="dialogue-indicator" id="dialogueIndicator">▼</div>
     </div>
   </div>
-
-  <!-- Battle Layer -->
-  <div id="battleLayer" class="battle-layer hidden">
-    <div class="battle-field" id="battleField">
-      <div class="battle-bg" id="battleBg"></div>
-      <div class="battle-enemies" id="battleEnemies"></div>
-      <div class="battle-allies" id="battleAllies"></div>
-      <div class="battle-effect-layer" id="battleEffectLayer"></div>
-    </div>
-    <div class="battle-ui" id="battleUI">
-      <div class="turn-indicator hidden" id="turnIndicator"></div>
-      <div class="battle-status" id="battleStatus"></div>
-      <div class="battle-log" id="battleLog"></div>
-      <div class="battle-commands hidden" id="battleCommands"></div>
-    </div>
-  </div>
-
-  <!-- Menu Overlay -->
-  <div id="menuOverlay" class="menu-overlay hidden"></div>
 
   <!-- Transition Overlay -->
   <div id="transitionOverlay" class="transition-overlay hidden"></div>
