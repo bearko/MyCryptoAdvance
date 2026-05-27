@@ -75,6 +75,12 @@
   position: absolute; top: 0.5rem; right: 0.6rem;
   display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem;
 }
+.hud-remaining {
+  font-size: 0.85rem; font-weight: 900; color: var(--text);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9); letter-spacing: 0.04em;
+  background: rgba(0,0,0,0.45); padding: 0.15rem 0.5rem; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
 .hud-kills {
   font-size: 0.7rem; font-weight: 900; color: var(--damage);
   text-shadow: 0 1px 3px rgba(0,0,0,0.9); letter-spacing: 0.06em;

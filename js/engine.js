@@ -40,6 +40,8 @@ export class GameEngine {
     this.level = 1;
     this.xpTable = [];
     this.kills = 0;
+    this.totalEnemies = 0;
+    this.spawnedCount = 0;
     this.tactic = TACTIC.BALANCED;
     this.allyPhyBuff = 1.0;
     this.pickupRangeBonus = 0;
@@ -86,6 +88,8 @@ export class GameEngine {
     this.xp = 0;
     this.level = 1;
     this.kills = 0;
+    this.totalEnemies = stage.totalEnemies || 0;
+    this.spawnedCount = 0;
     this.allyPhyBuff = 1.0;
     this.pickupRangeBonus = 0;
 
@@ -164,7 +168,8 @@ export class GameEngine {
       this.stop();
       this.onDefeat();
     }
-    if (this.stageTime >= this.stageDuration && this.enemies.length === 0 && this.onVictory) {
+    const remaining = this.totalEnemies - this.kills;
+    if (this.totalEnemies > 0 && remaining <= 0 && this.enemies.length === 0 && this.spawnQueue.length === 0 && this.onVictory) {
       this.stop();
       this.onVictory({ kills: this.kills, level: this.level, time: this.stageTime });
     }
@@ -179,7 +184,11 @@ export class GameEngine {
         this.onBoss(wave);
       } else if (wave.enemies) {
         for (let i = 0; i < wave.count; i++) {
-          this.spawnQueue.push({ type: wave.enemies[i % wave.enemies.length], delay: i * wave.interval });
+          this.spawnQueue.push({
+            type: wave.enemies[i % wave.enemies.length],
+            delay: i * wave.interval,
+            spawnDir: wave.spawnDir || null,
+          });
         }
       }
       this.waveIndex++;
@@ -188,7 +197,7 @@ export class GameEngine {
     for (let i = this.spawnQueue.length - 1; i >= 0; i--) {
       this.spawnQueue[i].delay -= dt;
       if (this.spawnQueue[i].delay <= 0) {
-        this._spawnEnemy(this.spawnQueue[i].type);
+        this._spawnEnemy(this.spawnQueue[i].type, { spawnDir: this.spawnQueue[i].spawnDir });
         this.spawnQueue.splice(i, 1);
       }
     }
@@ -197,7 +206,13 @@ export class GameEngine {
   _spawnEnemy(typeKey, options = {}) {
     const def = ENEMY_TYPES[typeKey];
     if (!def) return;
-    const angle = Math.random() * PI2;
+    let angle;
+    if (options.spawnDir) {
+      const [center, spread] = options.spawnDir;
+      angle = center + (Math.random() - 0.5) * 2 * spread;
+    } else {
+      angle = Math.random() * PI2;
+    }
     const dist = Math.max(this.vw, this.vh) * 0.6 + Math.random() * 100;
     const x = this.player.x + Math.cos(angle) * dist;
     const y = this.player.y + Math.sin(angle) * dist;
@@ -215,6 +230,7 @@ export class GameEngine {
       isBoss: !!options.isBoss,
     };
     this.enemies.push(e);
+    this.spawnedCount++;
   }
 
   spawnBoss(wave) {
@@ -294,6 +310,7 @@ export class GameEngine {
   }
 
   _unitAttack(unit, dt) {
+    if (unit.atkType === 'none') return;
     unit.atkTimer += dt;
     const interval = 1.0 / unit.atkSpeed;
     if (unit.atkTimer < interval) return;
@@ -717,7 +734,15 @@ export class GameEngine {
     this.hud.level.textContent = `Lv.${this.level}`;
     this.hud.timer.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
     this.hud.kills.textContent = `${this.kills} KILLS`;
+    const remain = Math.max(0, this.totalEnemies - this.kills);
+    this.hud.remaining.textContent = `残 ${remain}`;
     this.hud.allies.textContent = `×${this.allies.filter(a => a.alive).length + 1}`;
+  }
+
+  equipWeapon(atkType, atkPattern, phyBonus = 0) {
+    this.player.atkType = atkType;
+    this.player.atkPattern = atkPattern;
+    this.player.phy += phyBonus;
   }
 
   setTactic(tactic) { this.tactic = tactic; }
