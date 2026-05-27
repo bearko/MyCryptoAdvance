@@ -92,6 +92,7 @@ async function runPrologue() {
 
 async function runSurvivalBattle() {
   $('sceneLayer').classList.add('hidden');
+  $('gameCanvas').classList.remove('hidden');
   $('battleHud').classList.remove('hidden');
 
   const gameCanvas = $('gameCanvas');
@@ -168,6 +169,7 @@ async function runSurvivalBattle() {
 
   await audio.fadeBgm(1000);
   $('battleHud').classList.add('hidden');
+  $('gameCanvas').classList.add('hidden');
   controls.destroy();
   $('sceneLayer').classList.remove('hidden');
 
