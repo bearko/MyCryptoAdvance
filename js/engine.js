@@ -86,6 +86,7 @@ export class GameEngine {
   initStage(stageKey, partyHeroes) {
     const stage = STAGE_WAVES[stageKey];
     this.fieldSize = stage.fieldSize || 2000;
+    this.laneWidth = stage.laneWidth || 0;
     this.stageDuration = stage.duration;
     this.waves = stage.waves;
     this.xpTable = stage.xpTable || [];
@@ -235,10 +236,13 @@ export class GameEngine {
     const x = this.player.x + Math.cos(angle) * dist;
     const y = this.player.y + Math.sin(angle) * dist;
     const scale = options.scale || 1;
+    const clampedX = this.laneWidth
+      ? Math.max(this.fieldSize / 2 - this.laneWidth / 2, Math.min(this.fieldSize / 2 + this.laneWidth / 2, x))
+      : Math.max(20, Math.min(this.fieldSize - 20, x));
     const e = {
       id: `e_${Date.now()}_${Math.random()}`,
       name: def.name, imageId: def.imageId,
-      x: Math.max(20, Math.min(this.fieldSize - 20, x)),
+      x: clampedX,
       y: Math.max(20, Math.min(this.fieldSize - 20, y)),
       radius: def.radius * scale,
       hp: def.hp * (options.hpMul || 1), maxHp: def.hp * (options.hpMul || 1),
@@ -264,6 +268,13 @@ export class GameEngine {
     this.allies.push(ally);
   }
 
+  _clampToLane(x) {
+    if (!this.laneWidth) return x;
+    const center = this.fieldSize / 2;
+    const half = this.laneWidth / 2;
+    return Math.max(center - half, Math.min(center + half, x));
+  }
+
   _updatePlayer(dt) {
     const p = this.player;
     if (!p.alive) return;
@@ -271,11 +282,13 @@ export class GameEngine {
     const mag = Math.sqrt(this.input.dx ** 2 + this.input.dy ** 2);
     if (mag > 0.1) {
       const nx = this.input.dx / mag, ny = this.input.dy / mag;
-      p.x = Math.max(p.radius, Math.min(this.fieldSize - p.radius, p.x + nx * speed * dt));
-      p.y = Math.max(p.radius, Math.min(this.fieldSize - p.radius, p.y + ny * speed * dt));
+      p.x += nx * speed * dt;
+      p.y += ny * speed * dt;
+      p.x = this._clampToLane(p.x);
+      p.y = Math.max(p.radius, Math.min(this.fieldSize - p.radius, p.y));
       p.facingX = nx; p.facingY = ny;
     }
-    this._unitAttack(p, dt);
+    this._contactAttack(p, dt);
     p.flash = Math.max(0, p.flash - dt * 5);
 
     this.cam.x = p.x - this.vw / 2 + this.screenShakeX;
@@ -318,44 +331,63 @@ export class GameEngine {
         }
       }
 
+      a.x = this._clampToLane(a.x);
+
       if (a.atkType === 'heal') {
         this._healAlly(a, dt);
       } else {
-        this._unitAttack(a, dt);
+        this._contactAttack(a, dt);
       }
       a.flash = Math.max(0, a.flash - dt * 5);
     }
   }
 
-  _unitAttack(unit, dt) {
+  _contactAttack(unit, dt) {
     if (unit.atkType === 'none') return;
     unit.atkTimer += dt;
-    const interval = 1.0 / unit.atkSpeed;
-    if (unit.atkTimer < interval) return;
-    unit.atkTimer -= interval;
+    const minInterval = 0.08;
+    if (unit.atkTimer < minInterval) return;
 
-    const target = this._findNearest(unit, this.enemies, unit.atkRange * (unit.isPlayer ? 1 : this.tactic.aggroRange));
-    if (!target) { unit.atkTimer = Math.min(unit.atkTimer, interval * 0.5); return; }
+    const contactRange = unit.atkRange + 10;
+    let hasContact = false;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const d2 = (e.x - unit.x) ** 2 + (e.y - unit.y) ** 2;
+      if (d2 < (contactRange + e.radius) ** 2) { hasContact = true; break; }
+    }
 
-    const dx = target.x - unit.x, dy = target.y - unit.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const nx = dx / dist, ny = dy / dist;
+    if (!hasContact) {
+      if (unit.atkType === 'ranged' || unit.atkType === 'magic') {
+        const interval = 1.0 / unit.atkSpeed;
+        if (unit.atkTimer < interval) return;
+        unit.atkTimer -= interval;
+        const target = this._findNearest(unit, this.enemies, unit.atkRange * 2.5);
+        if (!target) return;
+        const dx = target.x - unit.x, dy = target.y - unit.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const phyMul = unit.isPlayer ? 1 : this.allyPhyBuff;
+        const dmg = Math.floor((unit.phy * phyMul + unit.int * 0.5) * (0.9 + Math.random() * 0.2));
+        if (unit.atkPattern === 'field') {
+          this._aoeAttack(unit, dmg, unit.atkRange);
+        } else {
+          this._shootProjectile(unit, dx / dist, dy / dist, dmg, unit.atkRange * 3, unit.atkPattern);
+        }
+        audio.playSe('hit');
+      }
+      return;
+    }
+
+    unit.atkTimer = 0;
     const phyMul = unit.isPlayer ? 1 : this.allyPhyBuff;
     const dmg = Math.floor((unit.phy * phyMul + unit.int * 0.5) * (0.9 + Math.random() * 0.2));
-
-    switch (unit.atkPattern) {
-      case 'slash': case 'rapid': case 'spear': case 'wave':
-        this._meleeHit(unit, target, dmg, unit.atkRange, unit.atkPattern);
-        break;
-      case 'arrow': case 'bolt': case 'orb':
-        this._shootProjectile(unit, nx, ny, dmg, unit.atkRange * 3, unit.atkPattern);
-        audio.playSe('hit');
-        break;
-      case 'field':
-        this._aoeAttack(unit, dmg, unit.atkRange);
-        audio.playSe('hit');
-        break;
+    const target = this._findNearest(unit, this.enemies, contactRange + 20);
+    if (target) {
+      unit.facingX = target.x - unit.x;
+      unit.facingY = target.y - unit.y;
+      const fMag = Math.sqrt(unit.facingX ** 2 + unit.facingY ** 2);
+      if (fMag > 0) { unit.facingX /= fMag; unit.facingY /= fMag; }
     }
+    this._meleeHit(unit, target, dmg, unit.atkRange, unit.atkPattern || 'slash');
   }
 
   _meleeHit(attacker, target, dmg, range, pattern) {
@@ -503,7 +535,7 @@ export class GameEngine {
         e.x += nx * e.speed * dt;
         e.y += ny * e.speed * dt;
       }
-      e.x = Math.max(0, Math.min(this.fieldSize, e.x));
+      e.x = this._clampToLane(e.x);
       e.y = Math.max(0, Math.min(this.fieldSize, e.y));
       e.flash = Math.max(0, e.flash - dt * 8);
     }
@@ -660,11 +692,19 @@ export class GameEngine {
       ctx.beginPath(); ctx.moveTo(0, y - cam.y); ctx.lineTo(this.vw, y - cam.y); ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(200,100,100,0.2)';
-    ctx.lineWidth = 2;
-    const bx = -cam.x, by = -cam.y;
-    const bw = this.fieldSize, bh = this.fieldSize;
-    ctx.strokeRect(bx, by, bw, bh);
+    if (this.laneWidth) {
+      const center = this.fieldSize / 2;
+      const half = this.laneWidth / 2;
+      const leftWall = center - half - cam.x;
+      const rightWall = center + half - cam.x;
+      ctx.fillStyle = '#1a2a0a';
+      ctx.fillRect(0, 0, Math.max(0, leftWall), this.vh);
+      ctx.fillRect(rightWall, 0, this.vw - rightWall, this.vh);
+      ctx.strokeStyle = 'rgba(120,100,60,0.5)';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(leftWall, 0); ctx.lineTo(leftWall, this.vh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rightWall, 0); ctx.lineTo(rightWall, this.vh); ctx.stroke();
+    }
   }
 
   _drawSprite(ctx, cam, entity, size) {
