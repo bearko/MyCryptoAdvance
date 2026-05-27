@@ -1,8 +1,10 @@
 /* ============================================================
-   battle.js — turn-based battle system
+   battle.js — turn-based battle with target selection
    ============================================================ */
 
-import { ASSETS } from './constants.js';
+import { ASSETS, ENEMIES as ENEMY_DB } from './constants.js';
+import { gameState } from './state.js';
+import { audio } from './audio.js';
 
 export class BattleSystem {
   constructor() {
@@ -15,241 +17,448 @@ export class BattleSystem {
     this.statusEl = document.getElementById('battleStatus');
     this.logEl = document.getElementById('battleLog');
     this.commandsEl = document.getElementById('battleCommands');
+    this.turnIndicator = document.getElementById('turnIndicator');
 
     this.allies = [];
     this.enemies = [];
-    this.turnOrder = [];
-    this.currentTurn = 0;
+    this.battleActive = false;
     this.isPlayerTurn = false;
     this.resolve = null;
-    this.battleActive = false;
+    this._pendingAction = null;
+    this._pendingQueueCallback = null;
+    this._phyBuff = 1.0;
 
     this._onCommand = this._onCommand.bind(this);
+    this._onEnemyClick = this._onEnemyClick.bind(this);
+    this._onAllyClick = this._onAllyClick.bind(this);
     this.commandsEl.addEventListener('click', this._onCommand);
   }
 
-  start(allies, enemies, bgId) {
-    return new Promise((resolve) => {
+  start(allyUnits, enemyKeys, bgId) {
+    return new Promise(resolve => {
       this.resolve = resolve;
-      this.allies = allies.map(a => ({ ...a, hp: a.maxHp, cooldowns: {} }));
-      this.enemies = enemies.map(e => ({ ...e, hp: e.maxHp }));
+      this.allies = allyUnits.map(a => ({ ...a, cooldowns: {}, _defending: false }));
+      this.enemies = enemyKeys.map((key, i) => {
+        const e = ENEMY_DB[key];
+        return {
+          id: `enemy_${i}`, name: e.name, imageId: e.imageId,
+          maxHp: e.hp, hp: e.hp, phy: e.phy, int: e.int, agi: e.agi,
+          skills: [{ id: 'atk', name: '攻撃', type: 'phy', power: 1.0, target: 'single' }],
+        };
+      });
       this.battleActive = true;
+      this._phyBuff = 1.0;
       this.logEl.innerHTML = '';
 
       if (bgId) {
         this.bgEl.style.backgroundImage = `url(${ASSETS.background(bgId)})`;
       } else {
-        this.bgEl.style.background = 'linear-gradient(to bottom, #2a4a2a, #1a3a1a)';
+        this.bgEl.style.background = 'linear-gradient(180deg, #3a5a3a, #1a3a1a)';
       }
 
       this.layer.classList.remove('hidden');
-      this._renderUnits();
-      this._renderStatus();
+      this._render();
       this._addLog('戦闘開始！', 'info');
-
-      setTimeout(() => this._nextTurn(), 800);
+      audio.playBgm('pve.mp3');
+      setTimeout(() => this._nextRound(), 800);
     });
   }
 
-  addAlly(allyData) {
-    const ally = { ...allyData, hp: allyData.maxHp, cooldowns: {} };
-    this.allies.push(ally);
-    this._renderUnits();
+  _render() {
+    this._renderEnemies();
+    this._renderAllies();
     this._renderStatus();
   }
 
-  _renderUnits() {
+  _renderEnemies() {
     this.enemiesEl.innerHTML = '';
-    this.enemies.forEach((enemy) => {
-      const unit = this._createUnitEl(enemy, false);
-      this.enemiesEl.appendChild(unit);
-    });
+    this.enemies.forEach(enemy => {
+      const el = document.createElement('div');
+      el.className = 'battle-unit battle-unit--enemy';
+      el.id = `unit-${enemy.id}`;
+      el.dataset.unitId = enemy.id;
+      if (enemy.hp <= 0) el.classList.add('battle-unit--dead');
 
-    this.alliesEl.innerHTML = '';
-    this.allies.forEach((ally) => {
-      const unit = this._createUnitEl(ally, true);
-      this.alliesEl.appendChild(unit);
+      const img = document.createElement('img');
+      img.className = 'battle-unit__sprite';
+      img.src = ASSETS.enemy(enemy.imageId);
+      img.alt = enemy.name;
+      img.draggable = false;
+
+      const hpWrap = document.createElement('div');
+      hpWrap.className = 'hp-bar';
+      const hpFill = document.createElement('div');
+      hpFill.className = 'hp-bar__fill';
+      const ratio = Math.max(0, enemy.hp / enemy.maxHp);
+      hpFill.style.width = `${ratio * 100}%`;
+      if (ratio < 0.3) hpFill.classList.add('hp-bar__fill--low');
+      hpWrap.appendChild(hpFill);
+
+      const hpText = document.createElement('div');
+      hpText.className = 'battle-unit__hp-text';
+      hpText.textContent = `${Math.max(0, enemy.hp)}`;
+
+      const name = document.createElement('div');
+      name.className = 'battle-unit__name';
+      name.textContent = enemy.name;
+
+      el.append(img, hpWrap, hpText, name);
+      this.enemiesEl.appendChild(el);
     });
   }
 
-  _createUnitEl(unit, isAlly) {
-    const el = document.createElement('div');
-    el.className = 'battle-unit';
-    el.id = `unit-${unit.id}`;
-    if (unit.hp <= 0) el.classList.add('battle-unit--dead');
+  _renderAllies() {
+    this.alliesEl.innerHTML = '';
+    this.allies.forEach(ally => {
+      const el = document.createElement('div');
+      el.className = 'battle-unit battle-unit--ally';
+      el.id = `unit-${ally.id}`;
+      el.dataset.unitId = ally.id;
+      if (ally.hp <= 0) el.classList.add('battle-unit--dead');
 
-    const img = document.createElement('img');
-    img.className = 'battle-unit__sprite';
-    if (isAlly) img.classList.add('battle-unit__sprite--large');
-    img.src = isAlly ? ASSETS.hero(unit.imageId) : ASSETS.enemy(unit.imageId);
-    img.alt = unit.name;
-    img.draggable = false;
+      const img = document.createElement('img');
+      img.className = 'battle-unit__sprite battle-unit__sprite--large';
+      img.src = ASSETS.hero(ally.imageId);
+      img.alt = ally.name;
+      img.draggable = false;
 
-    const hpBar = document.createElement('div');
-    hpBar.className = 'hp-bar';
-    const hpFill = document.createElement('div');
-    hpFill.className = 'hp-bar__fill';
-    const ratio = Math.max(0, unit.hp / unit.maxHp);
-    hpFill.style.width = `${ratio * 100}%`;
-    if (ratio < 0.3) hpFill.classList.add('hp-bar__fill--low');
-    hpBar.appendChild(hpFill);
+      const hpWrap = document.createElement('div');
+      hpWrap.className = 'hp-bar hp-bar--ally';
+      const hpFill = document.createElement('div');
+      hpFill.className = 'hp-bar__fill';
+      const ratio = Math.max(0, ally.hp / ally.maxHp);
+      hpFill.style.width = `${ratio * 100}%`;
+      if (ratio < 0.3) hpFill.classList.add('hp-bar__fill--low');
+      hpWrap.appendChild(hpFill);
 
-    const name = document.createElement('div');
-    name.className = `battle-unit__name${isAlly ? ' battle-unit__name--ally' : ''}`;
-    name.textContent = unit.name;
+      const name = document.createElement('div');
+      name.className = 'battle-unit__name battle-unit__name--ally';
+      name.textContent = ally.name;
 
-    el.appendChild(img);
-    el.appendChild(hpBar);
-    el.appendChild(name);
-    return el;
+      el.append(img, hpWrap, name);
+      this.alliesEl.appendChild(el);
+    });
   }
 
   _renderStatus() {
     this.statusEl.innerHTML = '';
-    this.allies.forEach((ally) => {
+    this.allies.forEach(ally => {
       const card = document.createElement('div');
       card.className = 'status-card';
+      if (ally.hp <= 0) card.classList.add('status-card--dead');
       const ratio = Math.max(0, ally.hp / ally.maxHp);
       card.innerHTML = `
         <img class="status-card__portrait" src="${ASSETS.hero(ally.imageId)}" alt="${ally.name}" draggable="false">
         <div class="status-card__info">
-          <div class="status-card__name">${ally.name}</div>
+          <div class="status-card__name">${ally.name} <span class="status-card__lv">Lv.${gameState.getHero(ally.id)?.level || 1}</span></div>
           <div class="status-card__hp">HP ${Math.max(0, ally.hp)} / ${ally.maxHp}</div>
-          <div class="status-card__bar">
-            <div class="status-card__bar-fill" style="width:${ratio * 100}%;${ratio < 0.3 ? 'background:var(--hp-bar-low)' : ''}"></div>
-          </div>
-        </div>
-      `;
+          <div class="status-card__bar"><div class="status-card__bar-fill" style="width:${ratio * 100}%;${ratio < 0.3 ? 'background:var(--hp-bar-low)' : ''}"></div></div>
+        </div>`;
       this.statusEl.appendChild(card);
     });
   }
 
-  _nextTurn() {
+  _nextRound() {
     if (!this.battleActive) return;
+    const livingE = this.enemies.filter(e => e.hp > 0);
+    const livingA = this.allies.filter(a => a.hp > 0);
+    if (livingE.length === 0) { this._endBattle(true); return; }
+    if (livingA.length === 0) { this._endBattle(false); return; }
 
-    const livingEnemies = this.enemies.filter(e => e.hp > 0);
-    const livingAllies = this.allies.filter(a => a.hp > 0);
-
-    if (livingEnemies.length === 0) {
-      this._endBattle(true);
-      return;
-    }
-    if (livingAllies.length === 0) {
-      this._endBattle(false);
-      return;
-    }
-
-    const allUnits = [
-      ...livingAllies.map(a => ({ ...a, isAlly: true })),
-      ...livingEnemies.map(e => ({ ...e, isAlly: false })),
+    const all = [
+      ...livingA.map(a => ({ ref: a, isAlly: true })),
+      ...livingE.map(e => ({ ref: e, isAlly: false })),
     ];
-    allUnits.sort((a, b) => b.agi - a.agi);
-
-    this._processTurnQueue(allUnits, 0);
+    all.sort((a, b) => b.ref.agi - a.ref.agi);
+    this._processQueue(all, 0);
   }
 
-  async _processTurnQueue(queue, index) {
+  _processQueue(queue, idx) {
     if (!this.battleActive) return;
-    if (index >= queue.length) {
-      setTimeout(() => this._nextTurn(), 400);
-      return;
-    }
+    if (idx >= queue.length) { setTimeout(() => this._nextRound(), 300); return; }
+    const { ref, isAlly } = queue[idx];
+    const actual = isAlly ? this.allies.find(a => a.id === ref.id) : this.enemies.find(e => e.id === ref.id);
+    if (!actual || actual.hp <= 0) { this._processQueue(queue, idx + 1); return; }
 
-    const unit = queue[index];
+    this._highlightTurn(actual.id, isAlly);
 
-    const actualUnit = unit.isAlly
-      ? this.allies.find(a => a.id === unit.id)
-      : this.enemies.find(e => e.id === unit.id);
-
-    if (!actualUnit || actualUnit.hp <= 0) {
-      this._processTurnQueue(queue, index + 1);
-      return;
-    }
-
-    if (unit.isAlly) {
-      if (unit.id === 'player') {
-        actualUnit._defending = false;
-        actualUnit.skills.forEach(s => { if (s.cooldown > 0) s.cooldown--; });
-        this.isPlayerTurn = true;
-        this._pendingQueueCallback = () => this._processTurnQueue(queue, index + 1);
-        this.commandsEl.classList.remove('hidden');
-        this._updateCommandButtons();
+    if (isAlly) {
+      if (actual.isPlayer) {
+        actual._defending = false;
+        actual.skills.forEach(s => { if (s.cooldown > 0) s.cooldown--; });
+        this._showCommands(actual, () => this._processQueue(queue, idx + 1));
       } else {
-        await this._aiAllyAction(actualUnit);
-        this._processTurnQueue(queue, index + 1);
+        this._aiAllyTurn(actual).then(() => this._processQueue(queue, idx + 1));
       }
     } else {
-      await this._enemyAction(actualUnit);
-      this._processTurnQueue(queue, index + 1);
+      this._enemyTurn(actual).then(() => this._processQueue(queue, idx + 1));
     }
   }
 
-  _updateCommandButtons() {
-    const player = this.allies.find(a => a.id === 'player');
-    if (!player) return;
-    const btns = this.commandsEl.querySelectorAll('.btn--battle');
-    btns.forEach(btn => {
-      btn.disabled = false;
-      const cmd = btn.dataset.cmd;
-      if (cmd === 'skill') {
-        const skill = player.skills[1];
-        if (skill && skill.cooldown > 0) {
-          btn.disabled = true;
-          btn.textContent = `スキル (${skill.cooldown})`;
-        } else {
-          btn.textContent = 'スキル';
-        }
-      }
+  _highlightTurn(unitId, isAlly) {
+    document.querySelectorAll('.battle-unit--active').forEach(el => el.classList.remove('battle-unit--active'));
+    const el = document.getElementById(`unit-${unitId}`);
+    if (el) el.classList.add('battle-unit--active');
+    if (this.turnIndicator) {
+      const unit = isAlly ? this.allies.find(a => a.id === unitId) : this.enemies.find(e => e.id === unitId);
+      this.turnIndicator.textContent = unit ? `${unit.name} のターン` : '';
+      this.turnIndicator.classList.remove('hidden');
+    }
+  }
+
+  _showCommands(player, callback) {
+    this.isPlayerTurn = true;
+    this._pendingQueueCallback = callback;
+    this.commandsEl.innerHTML = '';
+
+    const cmds = [
+      { id: 'attack', label: '攻撃', icon: '⚔' },
+      { id: 'skill', label: 'スキル', icon: '✦' },
+      { id: 'item', label: 'アイテム', icon: '🧪' },
+      { id: 'defend', label: '防御', icon: '🛡' },
+    ];
+
+    cmds.forEach(cmd => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn--battle';
+      btn.dataset.cmd = cmd.id;
+      btn.innerHTML = `<span class="cmd-icon">${cmd.icon}</span><span class="cmd-label">${cmd.label}</span>`;
+      this.commandsEl.appendChild(btn);
     });
+
+    this.commandsEl.classList.remove('hidden');
+    this.commandsEl.classList.add('battle-commands--enter');
+    setTimeout(() => this.commandsEl.classList.remove('battle-commands--enter'), 300);
   }
 
   _onCommand(e) {
     const btn = e.target.closest('[data-cmd]');
-    if (!btn || btn.disabled || !this.isPlayerTurn) return;
-
+    if (!btn || !this.isPlayerTurn) return;
     const cmd = btn.dataset.cmd;
-    this.isPlayerTurn = false;
-    this.commandsEl.classList.add('hidden');
+    const player = this.allies.find(a => a.isPlayer && a.hp > 0);
+    if (!player) return;
 
-    const player = this.allies.find(a => a.id === 'player');
-    const livingEnemies = this.enemies.filter(e => e.hp > 0);
-    if (!player || livingEnemies.length === 0) return;
-
-    const target = livingEnemies[Math.floor(Math.random() * livingEnemies.length)];
+    audio.playSe('select');
 
     switch (cmd) {
       case 'attack':
-        this._performAttack(player, target, player.skills[0], true);
+        this._pendingAction = { type: 'attack', skill: player.skills[0], user: player };
+        this._showTargetSelect('enemy');
         break;
-      case 'skill': {
-        const skill = player.skills[1];
-        this._performAttack(player, target, skill, true);
-        skill.cooldown = 2;
+      case 'skill':
+        this._showSkillMenu(player);
         break;
-      }
+      case 'item':
+        this._showItemMenu(player);
+        break;
       case 'defend':
-        this._addLog(`${player.name}は身構えた！`, 'info');
         player._defending = true;
+        this._addLog(`${player.name}は身構えた！`, 'info');
         this._animateUnit(player.id, 'acting');
+        this._finishPlayerTurn();
+        break;
+      case 'back':
+        this._showCommands(player, this._pendingQueueCallback);
         break;
     }
-
-    setTimeout(() => {
-      if (this._pendingQueueCallback) {
-        const cb = this._pendingQueueCallback;
-        this._pendingQueueCallback = null;
-        cb();
-      }
-    }, 600);
   }
 
-  _performAttack(attacker, target, skill, isAlly) {
-    const baseDamage = skill.power * attacker.phy;
+  _showSkillMenu(player) {
+    this.commandsEl.innerHTML = '';
+    player.skills.forEach(skill => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn--battle btn--skill';
+      const onCd = skill.cooldown > 0;
+      btn.disabled = onCd;
+      btn.dataset.cmd = 'use_skill';
+      btn.dataset.skillId = skill.id;
+      const cdText = onCd ? ` (CT:${skill.cooldown})` : '';
+      const typeIcon = skill.type === 'heal' || skill.type === 'buff_phy' ? '💚' : '⚔';
+      btn.innerHTML = `<span class="cmd-icon">${typeIcon}</span><span class="cmd-label">${skill.name}${cdText}</span>`;
+      btn.addEventListener('click', () => {
+        if (onCd) return;
+        audio.playSe('select');
+        this._pendingAction = { type: 'skill', skill, user: player };
+        if (skill.target === 'single') {
+          this._showTargetSelect('enemy');
+        } else if (skill.target === 'single_ally') {
+          this._showTargetSelect('ally');
+        } else {
+          this._executeAction(this._pendingAction, null);
+        }
+      });
+      this.commandsEl.appendChild(btn);
+    });
+
+    const back = document.createElement('button');
+    back.className = 'btn btn--battle btn--back';
+    back.dataset.cmd = 'back';
+    back.innerHTML = '<span class="cmd-icon">←</span><span class="cmd-label">戻る</span>';
+    this.commandsEl.appendChild(back);
+  }
+
+  _showItemMenu(player) {
+    const items = gameState.getUsableItems();
+    this.commandsEl.innerHTML = '';
+
+    if (items.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'battle-log__entry battle-log__entry--info';
+      empty.textContent = 'アイテムがありません';
+      empty.style.textAlign = 'center';
+      empty.style.padding = '0.5rem';
+      this.commandsEl.appendChild(empty);
+    }
+
+    items.forEach(item => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn--battle btn--item';
+      btn.innerHTML = `<span class="cmd-label">${item.name} ×${item.qty}</span>`;
+      btn.addEventListener('click', () => {
+        audio.playSe('select');
+        if (item.type === 'heal') {
+          this._pendingAction = { type: 'item', item, user: player };
+          this._showTargetSelect('ally');
+        } else if (item.type === 'cd_reset') {
+          this._pendingAction = { type: 'item', item, user: player };
+          this._executeAction(this._pendingAction, player);
+        }
+      });
+      this.commandsEl.appendChild(btn);
+    });
+
+    const back = document.createElement('button');
+    back.className = 'btn btn--battle btn--back';
+    back.dataset.cmd = 'back';
+    back.innerHTML = '<span class="cmd-icon">←</span><span class="cmd-label">戻る</span>';
+    this.commandsEl.appendChild(back);
+  }
+
+  _showTargetSelect(targetType) {
+    this.commandsEl.innerHTML = '';
+    const hint = document.createElement('div');
+    hint.className = 'target-hint';
+    hint.textContent = targetType === 'enemy' ? '敵をタップして選択' : '味方をタップして選択';
+    this.commandsEl.appendChild(hint);
+
+    const back = document.createElement('button');
+    back.className = 'btn btn--battle btn--back';
+    back.dataset.cmd = 'back';
+    back.innerHTML = '<span class="cmd-icon">←</span><span class="cmd-label">戻る</span>';
+    this.commandsEl.appendChild(back);
+
+    if (targetType === 'enemy') {
+      this.enemiesEl.classList.add('battle-enemies--targeting');
+      this.enemies.forEach(enemy => {
+        if (enemy.hp <= 0) return;
+        const el = document.getElementById(`unit-${enemy.id}`);
+        if (el) {
+          el.classList.add('battle-unit--targetable');
+          el.addEventListener('click', this._onEnemyClick);
+        }
+      });
+    } else {
+      this.alliesEl.classList.add('battle-allies--targeting');
+      this.allies.forEach(ally => {
+        if (ally.hp <= 0) return;
+        const el = document.getElementById(`unit-${ally.id}`);
+        if (el) {
+          el.classList.add('battle-unit--targetable');
+          el.addEventListener('click', this._onAllyClick);
+        }
+      });
+    }
+  }
+
+  _clearTargeting() {
+    this.enemiesEl.classList.remove('battle-enemies--targeting');
+    this.alliesEl.classList.remove('battle-allies--targeting');
+    document.querySelectorAll('.battle-unit--targetable').forEach(el => {
+      el.classList.remove('battle-unit--targetable');
+      el.removeEventListener('click', this._onEnemyClick);
+      el.removeEventListener('click', this._onAllyClick);
+    });
+  }
+
+  _onEnemyClick(e) {
+    const el = e.currentTarget;
+    const unitId = el.dataset.unitId;
+    const target = this.enemies.find(en => en.id === unitId);
+    if (!target || target.hp <= 0) return;
+    audio.playSe('confirm');
+    this._clearTargeting();
+    this._executeAction(this._pendingAction, target);
+  }
+
+  _onAllyClick(e) {
+    const el = e.currentTarget;
+    const unitId = el.dataset.unitId;
+    const target = this.allies.find(a => a.id === unitId);
+    if (!target || target.hp <= 0) return;
+    audio.playSe('confirm');
+    this._clearTargeting();
+    this._executeAction(this._pendingAction, target);
+  }
+
+  _executeAction(action, target) {
+    const { type, skill, item, user } = action;
+
+    if (type === 'attack' || type === 'skill') {
+      if (skill.target === 'all_enemy') {
+        const living = this.enemies.filter(e => e.hp > 0);
+        living.forEach((t, i) => setTimeout(() => this._performAttack(user, t, skill, true), i * 200));
+        if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+      } else if (skill.target === 'all_ally') {
+        if (skill.type === 'heal') {
+          const living = this.allies.filter(a => a.hp > 0);
+          living.forEach(a => {
+            const healAmt = Math.floor(user.int * skill.power + user.maxHp * 0.1);
+            a.hp = Math.min(a.maxHp, a.hp + healAmt);
+            this._showDamage(a.id, healAmt, false, false, true);
+            audio.playSe('heal');
+          });
+          this._addLog(`${user.name}の${skill.name}！ 味方全員のHPが回復した！`, 'heal');
+          if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+        } else if (skill.type === 'buff_phy') {
+          this._phyBuff = skill.power;
+          this._addLog(`${user.name}の${skill.name}！ 味方の攻撃力が上がった！`, 'info');
+          audio.playSe('heal');
+          if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+        }
+        this._animateUnit(user.id, 'acting');
+      } else {
+        this._performAttack(user, target, skill, true);
+        if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+      }
+    } else if (type === 'item') {
+      const used = gameState.useItem(item.id);
+      if (used) {
+        if (used.type === 'heal') {
+          target.hp = Math.min(target.maxHp, target.hp + used.value);
+          this._showDamage(target.id, used.value, false, false, true);
+          this._addLog(`${user.name}は${used.name}を使った！ ${target.name}のHPが${used.value}回復！`, 'heal');
+          audio.playSe('heal');
+        } else if (used.type === 'cd_reset') {
+          user.skills.forEach(s => s.cooldown = 0);
+          this._addLog(`${user.name}は${used.name}を使った！ スキルCTがリセットされた！`, 'info');
+          audio.playSe('item');
+        }
+      }
+    }
+
+    this._render();
+    this._finishPlayerTurn();
+  }
+
+  _performAttack(attacker, target, skill, isAllyAttacker) {
+    const stat = skill.type === 'int' ? attacker.int : attacker.phy;
+    let baseDamage = skill.power * stat * (isAllyAttacker ? this._phyBuff : 1.0);
     const variance = 0.85 + Math.random() * 0.3;
     const defending = target._defending ? 0.5 : 1;
     let damage = Math.floor(baseDamage * variance * defending);
     const isCrit = Math.random() < 0.1;
     if (isCrit) damage = Math.floor(damage * 1.5);
+    damage = Math.max(1, damage);
 
     target.hp = Math.max(0, target.hp - damage);
     target._defending = false;
@@ -257,60 +466,115 @@ export class BattleSystem {
     this._animateUnit(attacker.id, 'acting');
     setTimeout(() => {
       this._animateUnit(target.id, 'hit');
-      this._showDamage(target.id, damage, isCrit, isAlly);
-    }, 200);
+      this._showDamage(target.id, damage, isCrit, false, false);
+      audio.playSe(isCrit ? 'critical' : 'hit');
+    }, 150);
 
     const critText = isCrit ? 'クリティカル！ ' : '';
     this._addLog(`${attacker.name}の${skill.name}！ ${critText}${target.name}に${damage}ダメージ！`, 'damage');
 
     if (target.hp <= 0) {
-      setTimeout(() => {
-        this._addLog(`${target.name}を倒した！`, 'info');
-      }, 300);
+      setTimeout(() => this._addLog(`${target.name}を倒した！`, 'info'), 200);
     }
 
-    this._renderUnits();
-    this._renderStatus();
+    this._render();
   }
 
-  async _aiAllyAction(ally) {
-    return new Promise((resolve) => {
-      const livingEnemies = this.enemies.filter(e => e.hp > 0);
-      if (livingEnemies.length === 0) { resolve(); return; }
+  _finishPlayerTurn() {
+    this.isPlayerTurn = false;
+    this.commandsEl.classList.add('hidden');
+    this._clearTargeting();
+    this._pendingAction = null;
+    setTimeout(() => {
+      if (this._pendingQueueCallback) {
+        const cb = this._pendingQueueCallback;
+        this._pendingQueueCallback = null;
+        cb();
+      }
+    }, 500);
+  }
 
-      const target = livingEnemies[Math.floor(Math.random() * livingEnemies.length)];
+  _aiAllyTurn(ally) {
+    return new Promise(resolve => {
+      const livingE = this.enemies.filter(e => e.hp > 0);
+      if (livingE.length === 0) { resolve(); return; }
 
-      let skill = ally.skills[0];
-      if (ally.skills[1] && (!ally.cooldowns[ally.skills[1].name] || ally.cooldowns[ally.skills[1].name] <= 0)) {
-        if (Math.random() < 0.3) {
-          skill = ally.skills[1];
-          ally.cooldowns[skill.name] = 3;
+      ally._defending = false;
+      ally.skills.forEach(s => { if (s.cooldown > 0) s.cooldown--; });
+
+      const needsHeal = this.allies.some(a => a.hp > 0 && a.hp / a.maxHp < 0.35);
+      const healSkill = ally.skills.find(s => s.type === 'heal' && s.cooldown <= 0);
+      const buffSkill = ally.skills.find(s => s.type === 'buff_phy' && s.cooldown <= 0);
+      const atkSkills = ally.skills.filter(s => s.type !== 'heal' && s.type !== 'buff_phy' && s.cooldown <= 0);
+
+      let skill, target;
+
+      if (needsHeal && healSkill && Math.random() < 0.7) {
+        skill = healSkill;
+        if (skill.target === 'single_ally') {
+          target = this.allies.filter(a => a.hp > 0).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+          const healAmt = Math.floor(ally.int * skill.power + ally.maxHp * 0.1);
+          target.hp = Math.min(target.maxHp, target.hp + healAmt);
+          this._animateUnit(ally.id, 'acting');
+          this._showDamage(target.id, healAmt, false, false, true);
+          this._addLog(`${ally.name}の${skill.name}！ ${target.name}のHPが${healAmt}回復！`, 'heal');
+          audio.playSe('heal');
+          if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+          this._render();
+          setTimeout(resolve, 500);
+          return;
+        } else {
+          const livingA = this.allies.filter(a => a.hp > 0);
+          livingA.forEach(a => {
+            const healAmt = Math.floor(ally.int * skill.power + ally.maxHp * 0.1);
+            a.hp = Math.min(a.maxHp, a.hp + healAmt);
+            this._showDamage(a.id, healAmt, false, false, true);
+          });
+          this._animateUnit(ally.id, 'acting');
+          this._addLog(`${ally.name}の${skill.name}！ 味方全員のHPが回復した！`, 'heal');
+          audio.playSe('heal');
+          if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+          this._render();
+          setTimeout(resolve, 500);
+          return;
         }
       }
 
-      for (const key in ally.cooldowns) {
-        if (ally.cooldowns[key] > 0) ally.cooldowns[key]--;
+      if (buffSkill && this._phyBuff <= 1.0 && Math.random() < 0.3) {
+        skill = buffSkill;
+        this._phyBuff = skill.power;
+        this._animateUnit(ally.id, 'acting');
+        this._addLog(`${ally.name}の${skill.name}！ 味方の攻撃力が上がった！`, 'info');
+        audio.playSe('heal');
+        if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+        setTimeout(resolve, 500);
+        return;
       }
 
-      setTimeout(() => {
-        this._performAttack(ally, target, skill, true);
-        setTimeout(resolve, 500);
-      }, 400);
+      skill = atkSkills.length > 1 && Math.random() < 0.35 ? atkSkills[1] || atkSkills[0] : atkSkills[0];
+      if (!skill) skill = ally.skills[0];
+
+      if (skill.target === 'all_enemy') {
+        livingE.forEach((t, i) => setTimeout(() => this._performAttack(ally, t, skill, true), i * 150));
+      } else {
+        target = livingE[Math.floor(Math.random() * livingE.length)];
+        setTimeout(() => this._performAttack(ally, target, skill, true), 300);
+      }
+      if (skill.cooldownMax) skill.cooldown = skill.cooldownMax;
+      setTimeout(resolve, 600);
     });
   }
 
-  async _enemyAction(enemy) {
-    return new Promise((resolve) => {
-      const livingAllies = this.allies.filter(a => a.hp > 0);
-      if (livingAllies.length === 0) { resolve(); return; }
-
-      const target = livingAllies[Math.floor(Math.random() * livingAllies.length)];
-      const skill = { name: '攻撃', type: 'attack', power: 1.0 };
-
+  _enemyTurn(enemy) {
+    return new Promise(resolve => {
+      const livingA = this.allies.filter(a => a.hp > 0);
+      if (livingA.length === 0) { resolve(); return; }
+      const target = livingA[Math.floor(Math.random() * livingA.length)];
+      const skill = enemy.skills[0];
       setTimeout(() => {
         this._performAttack(enemy, target, skill, false);
         setTimeout(resolve, 500);
-      }, 400);
+      }, 300);
     });
   }
 
@@ -323,20 +587,18 @@ export class BattleSystem {
     setTimeout(() => el.classList.remove(`battle-unit--${type}`), 400);
   }
 
-  _showDamage(unitId, damage, isCrit, isAllyAttacking) {
+  _showDamage(unitId, value, isCrit, isMiss, isHeal) {
     const el = document.getElementById(`unit-${unitId}`);
     if (!el) return;
-
     const rect = el.getBoundingClientRect();
     const fieldRect = this.fieldEl.getBoundingClientRect();
-
     const dmgEl = document.createElement('div');
     dmgEl.className = 'damage-number';
-    if (isCrit) dmgEl.classList.add('damage-number--critical');
-    dmgEl.textContent = damage;
-    dmgEl.style.left = `${rect.left - fieldRect.left + rect.width / 2 - 15}px`;
-    dmgEl.style.top = `${rect.top - fieldRect.top}px`;
-
+    if (isHeal) dmgEl.classList.add('damage-number--heal');
+    else if (isCrit) dmgEl.classList.add('damage-number--critical');
+    dmgEl.textContent = isHeal ? `+${value}` : `${value}`;
+    dmgEl.style.left = `${rect.left - fieldRect.left + rect.width / 2 - 20}px`;
+    dmgEl.style.top = `${rect.top - fieldRect.top - 10}px`;
     this.effectLayer.appendChild(dmgEl);
     setTimeout(() => dmgEl.remove(), 1000);
   }
@@ -347,11 +609,17 @@ export class BattleSystem {
     entry.textContent = text;
     this.logEl.appendChild(entry);
     this.logEl.scrollTop = this.logEl.scrollHeight;
+    while (this.logEl.children.length > 50) this.logEl.removeChild(this.logEl.firstChild);
   }
 
   _endBattle(victory) {
     this.battleActive = false;
     this.commandsEl.classList.add('hidden');
+    this._clearTargeting();
+    document.querySelectorAll('.battle-unit--active').forEach(el => el.classList.remove('battle-unit--active'));
+    if (this.turnIndicator) this.turnIndicator.classList.add('hidden');
+
+    audio.playSe(victory ? 'victory' : 'defeat');
 
     setTimeout(() => {
       const result = document.createElement('div');
@@ -361,20 +629,17 @@ export class BattleSystem {
           ${victory ? 'VICTORY' : 'DEFEAT'}
         </div>
         <div class="battle-result__sub">${victory ? '戦闘に勝利した！' : '力尽きた…'}</div>
-        <button class="battle-result__btn">${victory ? '続ける' : 'もう一度'}</button>
-      `;
+        <button class="battle-result__btn">${victory ? '続ける' : 'もう一度'}</button>`;
 
       result.querySelector('.battle-result__btn').addEventListener('click', () => {
+        audio.playSe('confirm');
         result.remove();
         this.layer.classList.add('hidden');
-        if (this.resolve) {
-          this.resolve(victory);
-          this.resolve = null;
-        }
+        if (this.resolve) { this.resolve(victory); this.resolve = null; }
       });
 
       this.fieldEl.appendChild(result);
-    }, 800);
+    }, 600);
   }
 
   hide() {
