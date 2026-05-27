@@ -168,6 +168,7 @@ export class BattleSystem {
 
     if (unit.isAlly) {
       if (unit.id === 'player') {
+        actualUnit._defending = false;
         actualUnit.skills.forEach(s => { if (s.cooldown > 0) s.cooldown--; });
         this.isPlayerTurn = true;
         this._pendingQueueCallback = () => this._processTurnQueue(queue, index + 1);
