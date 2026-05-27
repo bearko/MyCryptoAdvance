@@ -155,8 +155,8 @@ async function runSurvivalBattle() {
   };
 
   const result = await new Promise(resolve => {
-    engine.onVictory = (stats) => resolve({ victory: true, ...stats });
-    engine.onDefeat = () => resolve({ victory: false, kills: engine.kills, level: engine.level, time: engine.stageTime });
+    engine.onVictory = (stats) => resolve({ victory: true, ...stats, maxCombo: engine.maxCombo });
+    engine.onDefeat = () => resolve({ victory: false, ...engine.getResults() });
 
     const updateLoop = () => {
       if (!engine.running && !engine.paused) return;
@@ -229,8 +229,9 @@ async function showChapterComplete(result) {
       <div class="chapter-complete__sub">第一章「関ヶ原の戦い」</div>
       <div class="chapter-complete__stats">
         <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
+        <div class="stat-item"><span class="stat-label">最大コンボ</span><span class="stat-value">${result.maxCombo || 0}</span></div>
         <div class="stat-item"><span class="stat-label">到達レベル</span><span class="stat-value">Lv.${result.level}</span></div>
-        <div class="stat-item"><span class="stat-label">生存時間</span><span class="stat-value">${Math.floor(result.time / 60)}:${Math.floor(result.time % 60).toString().padStart(2, '0')}</span></div>
+        <div class="stat-item"><span class="stat-label">クリア時間</span><span class="stat-value">${Math.floor(result.time / 60)}:${Math.floor(result.time % 60).toString().padStart(2, '0')}</span></div>
       </div>
       <div class="chapter-complete__text">
         クリプトワールドでの冒険は始まったばかり——<br>
