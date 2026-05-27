@@ -1,234 +1,159 @@
 /* ============================================================
-   game.css — scene, dialogue, characters, effects
+   game.css — scene, dialogue, map, characters, effects
    ============================================================ */
 
-/* ---------- Scene Layer ---------- */
-.scene-layer {
-  position: absolute;
-  inset: 0;
-}
-
-.scene-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.character-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.effect-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-/* ---------- Character Sprites ---------- */
-.sprite {
-  position: absolute;
-  image-rendering: pixelated;
-  -ms-interpolation-mode: nearest-neighbor;
-  transition: transform 0.3s, opacity 0.3s;
-}
-
-.sprite--bounce {
-  animation: sprite-bounce 0.6s ease-in-out infinite;
-}
-
-@keyframes sprite-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
-.sprite--fall {
-  animation: sprite-fall 3s ease-in forwards;
-}
-
-@keyframes sprite-fall {
-  0% { transform: translateY(-120vh) rotate(0deg); }
-  25% { transform: translateY(-60vh) rotate(15deg); }
-  50% { transform: translateY(-20vh) rotate(-10deg); }
-  75% { transform: translateY(5vh) rotate(5deg); }
+/* ---------- Scene ---------- */
+.scene-layer { position: absolute; inset: 0; }
+.scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.character-layer, .effect-layer { position: absolute; inset: 0; pointer-events: none; }
+.sprite { position: absolute; image-rendering: pixelated; transition: transform 0.3s, opacity 0.3s; }
+.sprite--bounce { animation: bounce 0.6s ease-in-out infinite; }
+@keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.sprite--fall { animation: fall 3s ease-in forwards; }
+@keyframes fall {
+  0% { transform: translateY(-120vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  25% { transform: translateY(-60vh) rotate(12deg); }
+  50% { transform: translateY(-20vh) rotate(-8deg); }
+  75% { transform: translateY(5vh) rotate(4deg); }
   100% { transform: translateY(0) rotate(0deg); }
 }
+.enemy-swarm { position: absolute; inset: 0; pointer-events: none; }
+.enemy-sprite { position: absolute; image-rendering: pixelated; }
+.enemy-sprite--appear { animation: enemyPop 0.5s ease-out forwards; opacity: 0; }
+@keyframes enemyPop { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
 
-.sprite--shake {
-  animation: sprite-shake 0.4s ease-in-out;
-}
-
-@keyframes sprite-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-4px); }
-  80% { transform: translateX(4px); }
-}
-
-/* ---------- Dialogue Layer ---------- */
+/* ---------- Dialogue ---------- */
 .dialogue-layer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  padding: 0 1rem 1.5rem;
-  pointer-events: auto;
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 50;
+  padding: 0 0.8rem 1.2rem; pointer-events: auto;
 }
-
+.dialogue-layer--enter { animation: dlgEnter 0.3s ease-out; }
+@keyframes dlgEnter { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .dialogue-box {
-  position: relative;
-  max-width: 600px;
-  margin: 0 auto;
-  background: rgba(18, 16, 24, 0.92);
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  padding: 1rem 1.2rem;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
+  display: flex; align-items: flex-start; gap: 0.8rem;
+  max-width: 640px; margin: 0 auto;
+  background: rgba(12, 10, 20, 0.94);
+  border: 1.5px solid var(--border); border-radius: var(--radius-lg);
+  padding: 0.9rem 1rem; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-lg); cursor: pointer; position: relative;
 }
-
+.dialogue-portrait {
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+  image-rendering: pixelated; border: 2px solid var(--accent);
+  background: radial-gradient(circle at 50% 35%, rgba(212,168,74,0.15), transparent 70%), var(--panel);
+}
+.dialogue-content { flex: 1; min-width: 0; }
 .dialogue-speaker {
-  font-size: 0.8rem;
-  font-weight: 800;
-  color: var(--accent);
-  letter-spacing: 0.06em;
-  margin-bottom: 0.4rem;
-  min-height: 1.2em;
+  font-size: 0.75rem; font-weight: 800; color: var(--accent);
+  letter-spacing: 0.05em; margin-bottom: 0.3rem; min-height: 1.1em;
 }
-
-.dialogue-text {
-  font-size: 1rem;
-  line-height: 1.7;
-  color: var(--text);
-  min-height: 2em;
-  white-space: pre-wrap;
-}
-
+.dialogue-text { font-size: 0.95rem; line-height: 1.75; color: var(--text); min-height: 2.5em; white-space: pre-wrap; }
 .dialogue-indicator {
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.8rem;
-  color: var(--accent);
-  font-size: 0.7rem;
-  animation: indicator-blink 1s ease-in-out infinite;
+  position: absolute; bottom: 0.45rem; right: 0.7rem;
+  color: var(--accent); font-size: 0.6rem; animation: blink 1s ease-in-out infinite;
+}
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
+
+/* ---------- Map ---------- */
+.map-layer { position: absolute; inset: 0; z-index: 30; background: var(--bg); display: flex; flex-direction: column; }
+.map-header {
+  padding: 0.8rem 1rem; background: var(--panel); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.map-title { font-size: 0.85rem; font-weight: 800; color: var(--accent); letter-spacing: 0.06em; }
+.map-field { flex: 1; position: relative; overflow: hidden; }
+.map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.map-nodes { position: absolute; inset: 0; }
+.map-node {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+  padding: 0; background: none; border: none; cursor: pointer;
+  transition: transform 0.2s;
+}
+.map-node:active { transform: translate(-50%, -50%) scale(0.95); }
+.map-node__icon {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; border: 2.5px solid var(--border);
+  background: var(--panel); color: var(--muted);
+  transition: all 0.3s; box-shadow: var(--shadow-sm);
+}
+.map-node__label {
+  font-size: 0.65rem; font-weight: 700; color: var(--muted);
+  white-space: nowrap; text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+.map-node--available .map-node__icon {
+  border-color: var(--accent); background: var(--accent-dim);
+  color: var(--accent); animation: nodeGlow 2s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(212,168,74,0.3);
+}
+.map-node--available .map-node__label { color: var(--accent); }
+@keyframes nodeGlow { 0%,100% { box-shadow: 0 0 8px rgba(212,168,74,0.2); } 50% { box-shadow: 0 0 18px rgba(212,168,74,0.5); } }
+.map-node--completed .map-node__icon {
+  border-color: var(--genbu); background: rgba(94,207,138,0.12); color: var(--genbu);
+}
+.map-node--completed .map-node__label { color: var(--genbu); opacity: 0.7; }
+.map-node--locked { cursor: default; opacity: 0.35; }
+.map-node--boss .map-node__icon {
+  width: 52px; height: 52px; border-color: var(--suzaku);
+  background: rgba(231,96,96,0.12); color: var(--suzaku);
+  animation: bossGlow 1.5s ease-in-out infinite;
+}
+@keyframes bossGlow { 0%,100% { box-shadow: 0 0 8px rgba(231,96,96,0.3); } 50% { box-shadow: 0 0 22px rgba(231,96,96,0.6); } }
+.map-node--boss .map-node__label { color: var(--suzaku); font-weight: 900; }
+
+/* ---------- HUD ---------- */
+.map-hud {
+  position: fixed; top: 0.6rem; right: 0.6rem; z-index: 35;
+  display: flex; gap: 0.4rem;
+}
+.hud-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(22,18,34,0.85); border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: border-color 0.2s;
+}
+.hud-btn:hover { border-color: var(--accent); }
+
+/* ---------- Transitions ---------- */
+.transition-overlay { position: absolute; inset: 0; z-index: 100; pointer-events: none; }
+.transition-overlay--fade { background: #000; animation: fadeIO 2s ease-in-out forwards; }
+@keyframes fadeIO { 0% { opacity: 0; } 40% { opacity: 1; } 60% { opacity: 1; } 100% { opacity: 0; } }
+.transition-overlay--black { background: #000; opacity: 0; transition: opacity 0.8s; }
+.transition-overlay--black.active { opacity: 1; }
+
+/* ---------- Effects ---------- */
+.flash-white { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 60; }
+.flash-white--active { animation: flash 0.3s ease-out; }
+@keyframes flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+.scene-layer--shake { animation: shake 0.5s ease-in-out; }
+@keyframes shake {
+  0%,100% { transform: translate(0,0); }
+  10% { transform: translate(-5px,-2px); } 20% { transform: translate(6px,3px); }
+  30% { transform: translate(-3px,5px); } 40% { transform: translate(5px,-3px); }
+  50% { transform: translate(-6px,2px); } 60% { transform: translate(4px,-5px); }
+  70% { transform: translate(-2px,6px); } 80% { transform: translate(3px,-2px); }
+  90% { transform: translate(-5px,3px); }
 }
 
-@keyframes indicator-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+/* ---------- Chapter Complete ---------- */
+.chapter-complete {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 1rem; padding: 2rem; text-align: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(212,168,74,0.06), transparent 60%), var(--bg);
+  animation: chapterFadeIn 1.5s ease;
 }
-
-/* ---------- Transition Overlay ---------- */
-.transition-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
+@keyframes chapterFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.chapter-complete__title {
+  font-size: clamp(1.4rem, 5vw, 2.4rem); font-weight: 900; color: var(--accent);
+  letter-spacing: 0.1em; text-shadow: 0 0 20px rgba(212,168,74,0.4);
 }
-
-.transition-overlay--fade {
-  background: #000;
-  animation: fade-in-out 2s ease-in-out forwards;
-}
-
-@keyframes fade-in-out {
-  0% { opacity: 0; }
-  40% { opacity: 1; }
-  60% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-.transition-overlay--black {
-  background: #000;
-  opacity: 0;
-  transition: opacity 0.8s;
-}
-
-.transition-overlay--black.active {
-  opacity: 1;
-}
-
-/* ---------- Falling Scene Specific ---------- */
-.sky-particles {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.sky-particle {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 50%;
-  animation: particle-rise linear infinite;
-}
-
-@keyframes particle-rise {
-  from { transform: translateY(0); }
-  to { transform: translateY(-120vh); }
-}
-
-/* ---------- Enemy Swarm (Scene 2) ---------- */
-.enemy-swarm {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.enemy-sprite {
-  position: absolute;
-  image-rendering: pixelated;
-  -ms-interpolation-mode: nearest-neighbor;
-}
-
-.enemy-sprite--appear {
-  animation: enemy-appear 0.5s ease-out forwards;
-}
-
-@keyframes enemy-appear {
-  from { opacity: 0; transform: scale(0.5); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* ---------- Flash Effect ---------- */
-.flash-white {
-  position: absolute;
-  inset: 0;
-  background: #fff;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 60;
-}
-
-.flash-white--active {
-  animation: flash 0.3s ease-out;
-}
-
-@keyframes flash {
-  0% { opacity: 0.8; }
-  100% { opacity: 0; }
-}
-
-/* ---------- Screen Shake ---------- */
-.scene-layer--shake {
-  animation: scene-shake 0.5s ease-in-out;
-}
-
-@keyframes scene-shake {
-  0%, 100% { transform: translate(0, 0); }
-  10% { transform: translate(-4px, -2px); }
-  20% { transform: translate(6px, 3px); }
-  30% { transform: translate(-3px, 4px); }
-  40% { transform: translate(5px, -3px); }
-  50% { transform: translate(-6px, 2px); }
-  60% { transform: translate(4px, -4px); }
-  70% { transform: translate(-2px, 5px); }
-  80% { transform: translate(3px, -2px); }
-  90% { transform: translate(-5px, 3px); }
-}
+.chapter-complete__sub { color: var(--muted); font-size: 0.9rem; letter-spacing: 0.15em; }
+.chapter-complete__members { display: flex; gap: 1.2rem; margin: 0.8rem 0; flex-wrap: wrap; justify-content: center; }
+.chapter-complete__hero { width: 56px; height: 56px; image-rendering: pixelated; border-radius: 50%; border: 2px solid var(--accent); }
+.chapter-complete__hero-name { font-size: 0.7rem; color: var(--muted); text-align: center; margin-top: 0.2rem; }
+.chapter-complete__text { color: var(--muted); font-size: 0.85rem; line-height: 1.9; }
+.chapter-complete__btn { margin-top: 1.2rem; }
+.chapter-complete__tbc { color: var(--muted); font-size: 0.7rem; opacity: 0.5; margin-top: 0.8rem; letter-spacing: 0.1em; }
