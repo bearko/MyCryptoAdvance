@@ -46,6 +46,14 @@ export class GameEngine {
     this.allyPhyBuff = 1.0;
     this.pickupRangeBonus = 0;
 
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.maxCombo = 0;
+    this.hitStop = 0;
+    this.screenShake = 0;
+    this.screenShakeX = 0;
+    this.screenShakeY = 0;
+
     this.input = { dx: 0, dy: 0 };
     this.onLevelUp = null;
     this.onRescue = null;
@@ -152,7 +160,17 @@ export class GameEngine {
   }
 
   _update(dt) {
+    if (this.hitStop > 0) { this.hitStop -= dt; return; }
+
     this.stageTime += dt;
+    this.comboTimer -= dt;
+    if (this.comboTimer <= 0) this.combo = 0;
+
+    if (this.screenShake > 0) {
+      this.screenShake -= dt;
+      this.screenShakeX = (Math.random() - 0.5) * this.screenShake * 20;
+      this.screenShakeY = (Math.random() - 0.5) * this.screenShake * 20;
+    } else { this.screenShakeX = 0; this.screenShakeY = 0; }
 
     this._processWaves(dt);
     this._updatePlayer(dt);
@@ -260,8 +278,8 @@ export class GameEngine {
     this._unitAttack(p, dt);
     p.flash = Math.max(0, p.flash - dt * 5);
 
-    this.cam.x = p.x - this.vw / 2;
-    this.cam.y = p.y - this.vh / 2;
+    this.cam.x = p.x - this.vw / 2 + this.screenShakeX;
+    this.cam.y = p.y - this.vh / 2 + this.screenShakeY;
   }
 
   _updateAllies(dt) {
@@ -331,32 +349,63 @@ export class GameEngine {
         break;
       case 'arrow': case 'bolt': case 'orb':
         this._shootProjectile(unit, nx, ny, dmg, unit.atkRange * 3, unit.atkPattern);
+        audio.playSe('hit');
         break;
       case 'field':
         this._aoeAttack(unit, dmg, unit.atkRange);
+        audio.playSe('hit');
         break;
     }
-    audio.playSe('hit');
   }
 
   _meleeHit(attacker, target, dmg, range, pattern) {
-    const hitEnemies = [];
-    const aoeRadius = pattern === 'wave' ? range * 1.5 : pattern === 'spear' ? range * 0.8 : range;
+    const arc = pattern === 'wave' ? PI2 : pattern === 'spear' ? 1.2 : pattern === 'rapid' ? 2.0 : 2.4;
+    const reach = pattern === 'wave' ? range * 1.8 : pattern === 'spear' ? range * 1.4 : range * 1.2;
+    const facing = Math.atan2(attacker.facingY, attacker.facingX);
+    let hitCount = 0;
+    const knockStr = pattern === 'wave' ? 120 : pattern === 'spear' ? 80 : 60;
+
     for (const e of this.enemies) {
       if (!e.alive) continue;
-      const d = Math.sqrt((e.x - attacker.x) ** 2 + (e.y - attacker.y) ** 2);
-      if (d <= aoeRadius + e.radius) hitEnemies.push(e);
-    }
-    const maxHits = pattern === 'rapid' ? 3 : pattern === 'wave' ? 8 : pattern === 'spear' ? 4 : 2;
-    hitEnemies.slice(0, maxHits).forEach(e => this._damageEnemy(e, dmg));
+      const dx = e.x - attacker.x, dy = e.y - attacker.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > reach + e.radius) continue;
 
-    this.particles.push({
-      x: attacker.x + attacker.facingX * range * 0.5,
-      y: attacker.y + attacker.facingY * range * 0.5,
-      type: 'slash', timer: 0.2, radius: aoeRadius * 0.8,
-      angle: Math.atan2(attacker.facingY, attacker.facingX),
-      color: pattern === 'wave' ? '#ffd700' : pattern === 'spear' ? '#ff6644' : '#ffffff',
-    });
+      const angle = Math.atan2(dy, dx);
+      let diff = angle - facing;
+      while (diff > Math.PI) diff -= PI2;
+      while (diff < -Math.PI) diff += PI2;
+      if (Math.abs(diff) > arc / 2 && pattern !== 'wave') continue;
+
+      const finalDmg = pattern === 'rapid' ? Math.floor(dmg * 0.6) : dmg;
+      this._damageEnemy(e, finalDmg);
+      if (d > 0) {
+        e.knockX = (dx / d) * knockStr;
+        e.knockY = (dy / d) * knockStr;
+      }
+      hitCount++;
+    }
+
+    if (hitCount >= 5) {
+      this.screenShake = Math.min(0.3, hitCount * 0.03);
+      this.hitStop = Math.min(0.04, hitCount * 0.005);
+    }
+
+    for (let s = 0; s < (pattern === 'rapid' ? 3 : pattern === 'wave' ? 2 : 1); s++) {
+      const a = facing + (s - (pattern === 'rapid' ? 1 : 0.5)) * 0.3;
+      this.particles.push({
+        x: attacker.x + Math.cos(a) * reach * 0.4,
+        y: attacker.y + Math.sin(a) * reach * 0.4,
+        type: 'slash', timer: 0.25, radius: reach * 0.9,
+        angle: a, arc,
+        color: pattern === 'wave' ? '#ffd700' : pattern === 'spear' ? '#ff6644' : pattern === 'rapid' ? '#88ddff' : '#ffffff',
+      });
+    }
+
+    if (hitCount > 0) {
+      const seType = hitCount >= 5 ? 'critical' : 'hit';
+      audio.playSe(seType);
+    }
   }
 
   _shootProjectile(attacker, nx, ny, dmg, range, pattern) {
@@ -402,12 +451,22 @@ export class GameEngine {
   _damageEnemy(enemy, dmg) {
     enemy.hp -= dmg;
     enemy.flash = 1;
-    this.particles.push({ x: enemy.x, y: enemy.y - 15, type: 'dmg', timer: 0.6, text: `${dmg}` });
     if (enemy.hp <= 0) {
       enemy.alive = false;
       this.kills++;
+      this.combo++;
+      this.comboTimer = 2.0;
+      if (this.combo > this.maxCombo) this.maxCombo = this.combo;
       this._dropXp(enemy.x, enemy.y, enemy.xpValue);
-      this.particles.push({ x: enemy.x, y: enemy.y, type: 'death', timer: 0.3, radius: enemy.radius * 1.5 });
+      for (let i = 0; i < 4; i++) {
+        this.particles.push({
+          x: enemy.x, y: enemy.y, type: 'burst',
+          timer: 0.3 + Math.random() * 0.2,
+          vx: (Math.random() - 0.5) * 120,
+          vy: (Math.random() - 0.5) * 120,
+          color: enemy.isBoss ? '#ffd700' : '#ff8844',
+        });
+      }
     }
   }
 
@@ -429,14 +488,24 @@ export class GameEngine {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (!e.alive) { this.enemies.splice(i, 1); continue; }
+
+      if (e.knockX || e.knockY) {
+        e.x += (e.knockX || 0) * dt * 3;
+        e.y += (e.knockY || 0) * dt * 3;
+        e.knockX *= 0.85; e.knockY *= 0.85;
+        if (Math.abs(e.knockX) < 1 && Math.abs(e.knockY) < 1) { e.knockX = 0; e.knockY = 0; }
+      }
+
       const dx = this.player.x - e.x, dy = this.player.y - e.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 5) {
+      if (dist > 5 && !e.knockX) {
         const nx = dx / dist, ny = dy / dist;
         e.x += nx * e.speed * dt;
         e.y += ny * e.speed * dt;
       }
-      e.flash = Math.max(0, e.flash - dt * 5);
+      e.x = Math.max(0, Math.min(this.fieldSize, e.x));
+      e.y = Math.max(0, Math.min(this.fieldSize, e.y));
+      e.flash = Math.max(0, e.flash - dt * 8);
     }
   }
 
@@ -523,22 +592,27 @@ export class GameEngine {
   }
 
   _checkCollisions() {
-    for (const e of this.enemies) {
-      if (!e.alive) continue;
-      const targets = [this.player, ...this.allies].filter(a => a.alive);
-      for (const t of targets) {
+    const targets = [this.player, ...this.allies].filter(a => a.alive);
+    for (const t of targets) {
+      if (!t._iframes) t._iframes = 0;
+      if (t._iframes > 0) { t._iframes -= 1; continue; }
+
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
         const d2 = (e.x - t.x) ** 2 + (e.y - t.y) ** 2;
         const r = e.radius + t.radius;
         if (d2 < r * r) {
-          const dmg = Math.max(1, Math.floor(e.phy * 0.3));
+          const dmg = Math.max(1, Math.floor(e.phy * 0.4));
           t.hp -= dmg;
           t.flash = 1;
+          t._iframes = 20;
           const dist = Math.sqrt(d2) || 1;
-          const pushX = (t.x - e.x) / dist * 4;
-          const pushY = (t.y - e.y) / dist * 4;
-          t.x += pushX; t.y += pushY;
-          e.x -= pushX * 0.5; e.y -= pushY * 0.5;
+          t.x += (t.x - e.x) / dist * 6;
+          t.y += (t.y - e.y) / dist * 6;
+          e.x -= (t.x - e.x) / dist * 2;
+          e.y -= (t.y - e.y) / dist * 2;
           if (t.hp <= 0) { t.alive = false; t.hp = 0; }
+          break;
         }
       }
     }
@@ -566,6 +640,7 @@ export class GameEngine {
     this._drawAllies(ctx, cam);
     this._drawPlayer(ctx, cam);
     this._drawParticles(ctx, cam);
+    this._drawCombo(ctx);
   }
 
   _drawField(ctx, cam) {
@@ -673,48 +748,80 @@ export class GameEngine {
   _drawParticles(ctx, cam) {
     for (const p of this.particles) {
       const sx = p.x - cam.x, sy = p.y - cam.y;
-      const alpha = Math.max(0, p.timer / 0.5);
+      const maxT = p.type === 'burst' ? 0.4 : 0.5;
+      const alpha = Math.max(0, Math.min(1, p.timer / maxT));
 
       if (p.type === 'slash') {
+        const halfArc = (p.arc || 2.4) / 2;
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, p.radius, p.angle - halfArc, p.angle + halfArc);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = alpha * 0.9;
+        ctx.beginPath();
+        ctx.arc(sx, sy, p.radius * 0.95, p.angle - halfArc * 0.8, p.angle + halfArc * 0.8);
+        ctx.stroke();
+        ctx.restore();
+      } else if (p.type === 'burst') {
+        const bx = sx + (p.vx || 0) * (maxT - p.timer);
+        const by = sy + (p.vy || 0) * (maxT - p.timer);
         ctx.save();
         ctx.globalAlpha = alpha;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(sx, sy, p.radius, p.angle - 0.6, p.angle + 0.6);
-        ctx.stroke();
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(bx, by, 3 * alpha, 0, PI2); ctx.fill();
         ctx.restore();
       } else if (p.type === 'aoe') {
         ctx.save();
-        ctx.globalAlpha = alpha * 0.5;
+        ctx.globalAlpha = alpha * 0.45;
         ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(sx, sy, p.radius, 0, PI2); ctx.fill();
-        ctx.restore();
-      } else if (p.type === 'dmg') {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = '#ff6060';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.text, sx, sy - (1 - alpha) * 15);
         ctx.restore();
       } else if (p.type === 'heal') {
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.fillStyle = '#50d080';
-        ctx.font = 'bold 12px sans-serif';
+        ctx.font = 'bold 13px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(p.text, sx, sy - (1 - alpha) * 15);
-        ctx.restore();
-      } else if (p.type === 'death') {
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(sx, sy, p.radius * (1 - alpha), 0, PI2); ctx.stroke();
+        ctx.fillText(p.text, sx, sy - (1 - alpha) * 18);
         ctx.restore();
       }
     }
+  }
+
+  _drawCombo(ctx) {
+    if (this.combo < 2) return;
+    const size = Math.min(40, 18 + this.combo * 0.5);
+    const alpha = Math.min(1, this.comboTimer);
+    const scale = this.combo > this.maxCombo - 1 ? 1.15 : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `900 ${size * scale}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = this.combo >= 50 ? '#ffd700' : this.combo >= 20 ? '#ff8844' : '#ffffff';
+    ctx.shadowColor = this.combo >= 50 ? 'rgba(255,215,0,0.6)' : 'rgba(255,100,50,0.4)';
+    ctx.shadowBlur = 12;
+    ctx.fillText(`${this.combo} COMBO`, this.vw / 2, this.vh * 0.18);
+    ctx.shadowBlur = 0;
+    if (this.combo >= 100) {
+      ctx.font = '700 14px sans-serif';
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText('UNSTOPPABLE!', this.vw / 2, this.vh * 0.18 + size * 0.8);
+    } else if (this.combo >= 50) {
+      ctx.font = '700 13px sans-serif';
+      ctx.fillStyle = '#ff8844';
+      ctx.fillText('INCREDIBLE!', this.vw / 2, this.vh * 0.18 + size * 0.8);
+    } else if (this.combo >= 20) {
+      ctx.font = '700 12px sans-serif';
+      ctx.fillStyle = '#ffaa66';
+      ctx.fillText('GREAT!', this.vw / 2, this.vh * 0.18 + size * 0.8);
+    }
+    ctx.restore();
   }
 
   _updateHud() {
@@ -737,6 +844,10 @@ export class GameEngine {
     const remain = Math.max(0, this.totalEnemies - this.kills);
     this.hud.remaining.textContent = `残 ${remain}`;
     this.hud.allies.textContent = `×${this.allies.filter(a => a.alive).length + 1}`;
+  }
+
+  getResults() {
+    return { kills: this.kills, level: this.level, time: this.stageTime, maxCombo: this.maxCombo };
   }
 
   equipWeapon(atkType, atkPattern, phyBonus = 0) {
