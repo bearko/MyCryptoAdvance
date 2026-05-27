@@ -223,6 +223,7 @@ export class GameEngine {
   }
 
   _spawnEnemy(typeKey, options = {}) {
+    if (this.enemies.length >= 300 && !options.isBoss) return;
     const def = ENEMY_TYPES[typeKey];
     if (!def) return;
     let angle;
@@ -490,7 +491,8 @@ export class GameEngine {
       this.comboTimer = 2.0;
       if (this.combo > this.maxCombo) this.maxCombo = this.combo;
       this._dropXp(enemy.x, enemy.y, enemy.xpValue);
-      for (let i = 0; i < 4; i++) {
+      const burstCount = this.particles.length < 200 ? (enemy.isBoss ? 6 : 2) : 0;
+      for (let i = 0; i < burstCount; i++) {
         this.particles.push({
           x: enemy.x, y: enemy.y, type: 'burst',
           timer: 0.3 + Math.random() * 0.2,
@@ -503,7 +505,11 @@ export class GameEngine {
   }
 
   _dropXp(x, y, amount) {
-    const count = Math.min(amount, 5);
+    if (this.pickups.length > 400) {
+      this.xp += amount;
+      return;
+    }
+    const count = Math.min(Math.ceil(amount / 3), 3);
     const perOrb = amount / count;
     for (let i = 0; i < count; i++) {
       this.pickups.push({
@@ -746,10 +752,28 @@ export class GameEngine {
   }
 
   _drawEnemies(ctx, cam) {
+    const many = this.enemies.length > 100;
     for (const e of this.enemies) {
       const sz = 32 * (e.scale || 1);
-      this._drawSprite(ctx, cam, e, sz);
-      if (e.isBoss) this._drawHpBar(ctx, cam, e, sz);
+      const sx = e.x - cam.x, sy = e.y - cam.y;
+      if (sx < -sz || sx > this.vw + sz || sy < -sz || sy > this.vh + sz) continue;
+
+      if (many && !e.isBoss) {
+        const sprite = this.sprites[e.spriteKey];
+        if (e.flash > 0) {
+          ctx.save(); ctx.globalAlpha = 0.6; ctx.filter = `brightness(${1 + e.flash * 3})`;
+        }
+        if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+          ctx.drawImage(sprite, sx - sz / 2, sy - sz / 2, sz, sz);
+        } else {
+          ctx.fillStyle = '#e76060';
+          ctx.fillRect(sx - sz / 3, sy - sz / 3, sz * 0.66, sz * 0.66);
+        }
+        if (e.flash > 0) ctx.restore();
+      } else {
+        this._drawSprite(ctx, cam, e, sz);
+        if (e.isBoss) this._drawHpBar(ctx, cam, e, sz);
+      }
     }
   }
 
