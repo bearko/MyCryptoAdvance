@@ -1,0 +1,56 @@
+/* ============================================================
+   responsive.css — mobile / tablet / pc breakpoints
+   ============================================================ */
+
+@media (min-width: 600px) {
+  html, body { font-size: 15px; }
+
+  .dialogue-box { padding: 1.2rem 1.4rem; }
+  .dialogue-text { font-size: 1.05rem; }
+
+  .battle-unit__sprite { width: 72px; height: 72px; }
+  .battle-unit__sprite--large { width: 96px; height: 96px; }
+  .hp-bar { width: 64px; }
+
+  .battle-ui { padding: 0.8rem 1.4rem; }
+  .status-card { min-width: 160px; }
+}
+
+@media (min-width: 960px) {
+  html, body { font-size: 16px; }
+
+  .dialogue-box { max-width: 720px; padding: 1.4rem 1.6rem; }
+
+  .battle-unit__sprite { width: 80px; height: 80px; }
+  .battle-unit__sprite--large { width: 112px; height: 112px; }
+  .hp-bar { width: 72px; }
+
+  .battle-enemies { top: 12%; gap: 1.5rem; }
+  .battle-allies { bottom: 22%; gap: 2rem; }
+
+  .battle-ui { max-height: 35%; padding: 1rem 2rem; }
+
+  .btn--battle { padding: 0.7rem 2rem; font-size: 1rem; }
+}
+
+@media (min-width: 1280px) {
+  .dialogue-box { max-width: 800px; }
+  .battle-ui { max-height: 30%; }
+}
+
+@media (hover: none) {
+  .btn--battle:hover {
+    border-color: var(--border);
+    color: var(--text);
+    background: var(--panel-2);
+  }
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  .dialogue-layer {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+  .battle-ui {
+    padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
+  }
+}

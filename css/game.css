@@ -1,0 +1,234 @@
+/* ============================================================
+   game.css — scene, dialogue, characters, effects
+   ============================================================ */
+
+/* ---------- Scene Layer ---------- */
+.scene-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.scene-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.character-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.effect-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---------- Character Sprites ---------- */
+.sprite {
+  position: absolute;
+  image-rendering: pixelated;
+  -ms-interpolation-mode: nearest-neighbor;
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+.sprite--bounce {
+  animation: sprite-bounce 0.6s ease-in-out infinite;
+}
+
+@keyframes sprite-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.sprite--fall {
+  animation: sprite-fall 3s ease-in forwards;
+}
+
+@keyframes sprite-fall {
+  0% { transform: translateY(-120vh) rotate(0deg); }
+  25% { transform: translateY(-60vh) rotate(15deg); }
+  50% { transform: translateY(-20vh) rotate(-10deg); }
+  75% { transform: translateY(5vh) rotate(5deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+.sprite--shake {
+  animation: sprite-shake 0.4s ease-in-out;
+}
+
+@keyframes sprite-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* ---------- Dialogue Layer ---------- */
+.dialogue-layer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 0 1rem 1.5rem;
+  pointer-events: auto;
+}
+
+.dialogue-box {
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+  background: rgba(18, 16, 24, 0.92);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+}
+
+.dialogue-speaker {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+  min-height: 1.2em;
+}
+
+.dialogue-text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text);
+  min-height: 2em;
+  white-space: pre-wrap;
+}
+
+.dialogue-indicator {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.8rem;
+  color: var(--accent);
+  font-size: 0.7rem;
+  animation: indicator-blink 1s ease-in-out infinite;
+}
+
+@keyframes indicator-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ---------- Transition Overlay ---------- */
+.transition-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.transition-overlay--fade {
+  background: #000;
+  animation: fade-in-out 2s ease-in-out forwards;
+}
+
+@keyframes fade-in-out {
+  0% { opacity: 0; }
+  40% { opacity: 1; }
+  60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.transition-overlay--black {
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+
+.transition-overlay--black.active {
+  opacity: 1;
+}
+
+/* ---------- Falling Scene Specific ---------- */
+.sky-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sky-particle {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: particle-rise linear infinite;
+}
+
+@keyframes particle-rise {
+  from { transform: translateY(0); }
+  to { transform: translateY(-120vh); }
+}
+
+/* ---------- Enemy Swarm (Scene 2) ---------- */
+.enemy-swarm {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.enemy-sprite {
+  position: absolute;
+  image-rendering: pixelated;
+  -ms-interpolation-mode: nearest-neighbor;
+}
+
+.enemy-sprite--appear {
+  animation: enemy-appear 0.5s ease-out forwards;
+}
+
+@keyframes enemy-appear {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ---------- Flash Effect ---------- */
+.flash-white {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.flash-white--active {
+  animation: flash 0.3s ease-out;
+}
+
+@keyframes flash {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* ---------- Screen Shake ---------- */
+.scene-layer--shake {
+  animation: scene-shake 0.5s ease-in-out;
+}
+
+@keyframes scene-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-4px, -2px); }
+  20% { transform: translate(6px, 3px); }
+  30% { transform: translate(-3px, 4px); }
+  40% { transform: translate(5px, -3px); }
+  50% { transform: translate(-6px, 2px); }
+  60% { transform: translate(4px, -4px); }
+  70% { transform: translate(-2px, 5px); }
+  80% { transform: translate(3px, -2px); }
+  90% { transform: translate(-5px, 3px); }
+}

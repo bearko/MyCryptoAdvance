@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#121018" />
+<title>MyCryptoAdvance — 時空英雄譚</title>
+
+<meta property="og:title" content="MyCryptoAdvance — 時空英雄譚" />
+<meta property="og:description" content="様々な時代にタイムスリップし、歴史上の偉人と共に戦うRPG" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%2250%22 font-size=%2256%22>⚔</text></svg>" />
+<link rel="stylesheet" href="css/base.css" />
+<link rel="stylesheet" href="css/layout.css" />
+<link rel="stylesheet" href="css/game.css" />
+<link rel="stylesheet" href="css/battle.css" />
+<link rel="stylesheet" href="css/responsive.css" />
+</head>
+
+<body>
+<!-- Splash Screen -->
+<div id="splash" class="splash">
+  <div class="splash__logo">MyCryptoAdvance</div>
+  <div class="splash__sub">時空英雄譚</div>
+  <div class="splash__loading">読み込み中…</div>
+  <div class="splash__progress"><div class="splash__bar"></div></div>
+</div>
+
+<!-- Title Screen -->
+<section id="titleScreen" class="title-screen hidden">
+  <h1 class="title-screen__title">MyCryptoAdvance</h1>
+  <p class="title-screen__sub">時空英雄譚</p>
+  <button id="btnPressStart" class="title-screen__press">Press to Start</button>
+</section>
+
+<!-- Game Container -->
+<main id="gameContainer" class="game-container hidden">
+  <!-- Scene Layer -->
+  <div id="sceneLayer" class="scene-layer">
+    <canvas id="sceneCanvas" class="scene-canvas"></canvas>
+    <div id="characterLayer" class="character-layer"></div>
+    <div id="effectLayer" class="effect-layer"></div>
+  </div>
+
+  <!-- Dialogue Layer -->
+  <div id="dialogueLayer" class="dialogue-layer hidden">
+    <div class="dialogue-box">
+      <div class="dialogue-speaker" id="dialogueSpeaker"></div>
+      <div class="dialogue-text" id="dialogueText"></div>
+      <div class="dialogue-indicator" id="dialogueIndicator">▼</div>
+    </div>
+  </div>
+
+  <!-- Battle Layer -->
+  <div id="battleLayer" class="battle-layer hidden">
+    <div class="battle-field" id="battleField">
+      <div class="battle-bg" id="battleBg"></div>
+      <div class="battle-enemies" id="battleEnemies"></div>
+      <div class="battle-allies" id="battleAllies"></div>
+      <div class="battle-effect-layer" id="battleEffectLayer"></div>
+    </div>
+    <div class="battle-ui" id="battleUI">
+      <div class="battle-status" id="battleStatus"></div>
+      <div class="battle-log" id="battleLog"></div>
+      <div class="battle-commands hidden" id="battleCommands">
+        <button class="btn btn--battle" data-cmd="attack">攻撃</button>
+        <button class="btn btn--battle" data-cmd="skill">スキル</button>
+        <button class="btn btn--battle" data-cmd="defend">防御</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transition Overlay -->
+  <div id="transitionOverlay" class="transition-overlay hidden"></div>
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
