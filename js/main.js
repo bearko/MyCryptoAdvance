@@ -103,7 +103,8 @@ async function runSurvivalBattle() {
 
   const party = [HEROES.player];
   engine.initStage('sekigahara_field', party, HEROES);
-  engine.equipWeapon('melee', 'slash', 10);
+  // MCS式: プレイヤーの startingExtension を装備
+  engine.equipExtension(engine.player, HEROES.player.startingExtension || 'novice_katana');
 
   audio.playBgm('pve.mp3');
 
@@ -160,7 +161,7 @@ async function runSurvivalBattle() {
     audio.playSe('victory');
     renderer.clear();
     renderer.drawGrassland();
-    await dialogue.show(DIALOGUES.battle_victory);
+    await dialogue.show(DIALOGUES.reach_exit);
     renderer.clear();
     await showChapterComplete(result);
   } else {
@@ -208,7 +209,7 @@ async function showChapterComplete(result) {
   container.innerHTML = `
     <div class="chapter-complete">
       <div class="chapter-complete__title">STAGE CLEAR</div>
-      <div class="chapter-complete__sub">第一章「関ヶ原の戦い」</div>
+      <div class="chapter-complete__sub">第一章ステージ1「関ヶ原の戦場」　— 脱出成功</div>
       <div class="chapter-complete__stats">
         <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
         <div class="stat-item"><span class="stat-label">最大コンボ</span><span class="stat-value">${result.maxCombo || 0}</span></div>
