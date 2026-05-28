@@ -138,31 +138,13 @@ export const LEVELUP_CHOICES = [
 
 export const DIALOGUES = {
   scene1_fall: [
-    { speaker: '', text: '・・・' },
-    { speaker: '', text: 'なんだ　ここ？' },
-    { speaker: '', text: 'え　落ちてる？　空！？' },
+    { speaker: '', text: 'え・・・落ちてる！？' },
     { speaker: '', text: 'うわーーーー！！' },
   ],
-  scene2_awaken: [
-    { speaker: '', text: '・・・・・・' },
-    { speaker: '', text: '痛っ・・・ここは・・・' },
-    { speaker: '', text: '草原？　いや・・・戦場？\n何が起きてるんだ・・・' },
-  ],
-  scene2_enemies: [
-    { speaker: '', text: '！？' },
-    { speaker: '', text: '何だあれは・・・！\nこっちに向かってくる！' },
-  ],
   scene_alone: [
-    { speaker: '', text: '・・・気付けば一人、戦場の真ん中に立っていた。' },
-    { speaker: '', text: '遠くで剣戟の音。\n各所で乱戦が起きている。' },
-    { speaker: '', text: '聞き慣れない言葉、見たことのない者たち・・・\nなのに、なぜかすべての声が「理解できる」。' },
-    { speaker: '', text: '（皆、違う時代の言葉を話しているはずなのに——\nなぜか自然と頭に入ってくる）' },
-    { speaker: '', text: '（仲間を集めなければ。\nこの戦場を、一人では生き抜けない——）' },
-  ],
-  get_katana: [
-    { speaker: '', text: '足元にカタナが落ちている・・・' },
+    { speaker: '', text: '痛っ・・・　ここは・・・戦場？' },
+    { speaker: '', text: '（足元にカタナが落ちている）' },
     { speaker: '', text: 'ノービスカタナを手に入れた！' },
-    { speaker: '', text: '（右下の地図に、戦っている者たちが見える。\n近づけば、何かわかるかもしれない）' },
   ],
   encounter_mitsunari: [
     { speaker: '？？？', text: '——援軍はまだか・・・！' },

@@ -57,30 +57,31 @@ async function startGame() {
 async function runPrologue() {
   renderer.clear();
   renderer.drawSky();
-  await sleep(800);
+  await sleep(600);
   const sz = Math.min(96, window.innerWidth * 0.2);
   renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), sz, { className: 'sprite--fall', offsetY: -30 });
-  await sleep(1200);
+  await sleep(1000);
   await dialogue.show(DIALOGUES.scene1_fall);
-  renderer.clear();
 
   await transition('black');
   renderer.clear();
   await transition('unblack');
   renderer.drawGrassland();
-  await sleep(600);
+  await sleep(400);
   renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), Math.min(80, window.innerWidth * 0.16), { offsetY: 20 });
   await dialogue.show(DIALOGUES.scene_alone);
 
-  await dialogue.show(DIALOGUES.get_katana);
-
-  await transition('black'); await sleep(400); renderer.clear();
+  renderer.clear();
 }
 
 async function runSurvivalBattle() {
   $('sceneLayer').classList.add('hidden');
   $('gameCanvas').classList.remove('hidden');
   $('battleHud').classList.remove('hidden');
+
+  // 前段のトランジション残留があれば確実に解除
+  const overlay = $('transitionOverlay');
+  overlay.className = 'transition-overlay hidden';
 
   const gameCanvas = $('gameCanvas');
   const hud = {
