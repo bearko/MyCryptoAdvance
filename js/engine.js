@@ -540,11 +540,26 @@ export class GameEngine {
       const fMag = Math.sqrt(unit.facingX ** 2 + unit.facingY ** 2);
       if (fMag > 0) { unit.facingX /= fMag; unit.facingY /= fMag; }
     }
+    // 射撃系は接触時もプロジェクタイル発射（広い扇エフェクトを出さない）
+    if (unit.atkType === 'ranged' || unit.atkType === 'magic') {
+      if (!target) return;
+      if (unit.atkPattern === 'field') {
+        this._aoeAttack(unit, dmg, unit.atkRange);
+      } else {
+        this._shootProjectile(unit, unit.facingX, unit.facingY, dmg, unit.atkRange * 3, unit.atkPattern);
+      }
+      audio.playSe('hit');
+      return;
+    }
     this._meleeHit(unit, target, dmg, unit.atkRange, unit.atkPattern || 'slash');
   }
 
   _meleeHit(attacker, target, dmg, range, pattern) {
-    const arc = pattern === 'wave' ? PI2 : pattern === 'spear' ? 1.2 : pattern === 'rapid' ? 2.0 : 2.4;
+    const arc = pattern === 'wave' ? PI2
+      : pattern === 'spear' ? 1.2
+      : pattern === 'rapid' ? 2.0
+      : pattern === 'arrow' ? (12 * Math.PI / 180) // 弓矢: 12度の鋭い前方扇
+      : 2.4;
     const reach = pattern === 'wave' ? range * 1.8 : pattern === 'spear' ? range * 1.4 : range * 1.2;
     const facing = Math.atan2(attacker.facingY, attacker.facingX);
     let hitCount = 0;

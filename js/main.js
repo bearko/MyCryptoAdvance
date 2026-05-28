@@ -336,11 +336,21 @@ async function animatePartyXpGain(snapshots) {
   for (const snap of snapshots) {
     const row = document.querySelector(`.party-row[data-hero-key="${snap.heroKey}"]`);
     if (!row) continue;
+
+    // 1体あたり最大2秒に収めるため、イベント数で速度を圧縮
+    const evCount = snap.events.length || 1;
+    // 各イベントの目標時間 = 2000ms / 件数。最小80ms、最大400ms。
+    const perEv = Math.max(80, Math.min(400, 2000 / evCount));
+    // レベルアップ複数時は最終レベルだけ大演出、途中は短いフラッシュのみ
+    const lvEvents = snap.events.filter(e => e.type === 'levelup');
+    const lastLvEvent = lvEvents[lvEvents.length - 1];
+
     for (const ev of snap.events) {
       if (ev.type === 'xp') {
-        await animateXpBar(row, ev.from, ev.to, ev.max);
+        await animateXpBar(row, ev.from, ev.to, ev.max, perEv);
       } else if (ev.type === 'levelup') {
-        await animateLevelUp(row, ev.newLevel);
+        const isLast = ev === lastLvEvent;
+        await animateLevelUp(row, ev.newLevel, isLast ? perEv : Math.min(perEv, 150));
         const fill = row.querySelector('.xp-bar__fill');
         const cur = row.querySelector('.xp-cur');
         fill.style.width = '0%';
@@ -350,13 +360,13 @@ async function animatePartyXpGain(snapshots) {
   }
 }
 
-function animateXpBar(row, from, to, max) {
+function animateXpBar(row, from, to, max, targetMs) {
   return new Promise(resolve => {
     const fill = row.querySelector('.xp-bar__fill');
     const cur = row.querySelector('.xp-cur');
     const maxEl = row.querySelector('.xp-max');
     maxEl.textContent = max;
-    const duration = Math.min(600, 150 + (to - from) * 25);
+    const duration = targetMs || Math.min(600, 150 + (to - from) * 25);
     const start = performance.now();
     function step(now) {
       const t = Math.min(1, (now - start) / duration);
@@ -365,13 +375,13 @@ function animateXpBar(row, from, to, max) {
       fill.style.width = `${(val / max) * 100}%`;
       cur.textContent = Math.floor(val);
       if (t < 1) requestAnimationFrame(step);
-      else { audio.playSe('select'); resolve(); }
+      else { resolve(); }
     }
     requestAnimationFrame(step);
   });
 }
 
-function animateLevelUp(row, newLevel) {
+function animateLevelUp(row, newLevel, durationMs) {
   return new Promise(resolve => {
     audio.playSe('levelup');
     const fx = row.querySelector('.party-row__levelup-fx');
@@ -383,7 +393,7 @@ function animateLevelUp(row, newLevel) {
       fx.classList.add('hidden');
       row.classList.remove('party-row--levelup');
       resolve();
-    }, 700);
+    }, durationMs || 700);
   });
 }
 
