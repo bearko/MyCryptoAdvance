@@ -70,24 +70,11 @@ async function runPrologue() {
   renderer.drawGrassland();
   await sleep(600);
   renderer.addSpriteCenter(ASSETS.hero(HEROES.player.imageId), Math.min(80, window.innerWidth * 0.16), { offsetY: 20 });
-  await dialogue.show(DIALOGUES.scene2_awaken);
-
-  screenShake(); await sleep(300);
-  renderer.addEnemySwarm(SWARM_ENEMY_IDS, ASSETS.enemy);
-  await sleep(500); flashWhite(); await sleep(300);
-  await dialogue.show(DIALOGUES.scene2_enemies);
-
-  await transition('black'); await sleep(500); renderer.clear();
-  await transition('unblack');
-  renderer.drawGrassland(); await sleep(300);
-  flashWhite(); screenShake(); await sleep(200);
-  renderer.addSpriteCenter(ASSETS.hero(HEROES.mitsunari.imageId), Math.min(96, window.innerWidth * 0.2), { className: 'sprite--bounce', offsetY: -30 });
-  await sleep(600);
-  await dialogue.show(DIALOGUES.scene3_mitsunari);
-  renderer.clear();
-  await transition('black'); await sleep(300); await transition('unblack');
+  await dialogue.show(DIALOGUES.scene_alone);
 
   await dialogue.show(DIALOGUES.get_katana);
+
+  await transition('black'); await sleep(400); renderer.clear();
 }
 
 async function runSurvivalBattle() {
@@ -113,8 +100,8 @@ async function runSurvivalBattle() {
   );
   await engine.loadSprites(spriteEntries);
 
-  const party = [HEROES.player, HEROES.mitsunari];
-  engine.initStage('sekigahara_field', party);
+  const party = [HEROES.player];
+  engine.initStage('sekigahara_field', party, HEROES);
   engine.equipWeapon('melee', 'slash', 10);
 
   audio.playBgm('pve.mp3');
@@ -138,20 +125,14 @@ async function runSurvivalBattle() {
     showLevelUpChoices(level);
   };
 
-  engine.onRescue = async (heroKey) => {
-    const heroDef = HEROES[heroKey];
-    if (!heroDef) return;
-    engine.addAlly(heroDef);
-    const dlgKey = `rescue_${heroKey}`;
+  engine.onEncounter = async (fh) => {
+    engine.pause();
+    const dlgKey = `encounter_${fh.heroKey}`;
     if (DIALOGUES[dlgKey]) {
-      engine.pause();
       await dialogue.show(DIALOGUES[dlgKey]);
-      engine.resume();
     }
-  };
-
-  engine.onBoss = (wave) => {
-    engine.spawnBoss(wave);
+    engine.completeEncounter(fh);
+    engine.resume();
   };
 
   const result = await new Promise(resolve => {
