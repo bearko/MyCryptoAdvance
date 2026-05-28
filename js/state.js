@@ -25,6 +25,10 @@ class PartyState {
     this.log = [];
     // 待機（次回戦闘の準備度合い）
     this.taskAssignments = {}; // { heroKey: 'shi'|'nou'|'sho'|'kou' }
+    // 施設レベル: 各施設のレベル（次回ターン時に効果適用）
+    this.facilities = { dojo: 0, market: 0, farm: 0, smith: 0 };
+    // 最後のターンイベント（リザルト表示用）
+    this.lastEvent = null;
   }
 
   addHero(heroKey) {
@@ -110,6 +114,13 @@ class PartyState {
   // 内政: 1ターン進行
   advanceTurn(productions) {
     this.turn++;
+    // 施設ボーナス
+    const fac = this.facilities;
+    if (fac.dojo > 0) productions.soldiers = (productions.soldiers || 0) + fac.dojo * 3;
+    if (fac.market > 0) productions.gold = (productions.gold || 0) + fac.market * 5;
+    if (fac.farm > 0) productions.food = (productions.food || 0) + fac.farm * 5;
+    if (fac.smith > 0) productions.materials = (productions.materials || 0) + fac.smith * 3;
+
     // productions = { gold, food, materials, soldiers }
     for (const k of Object.keys(productions)) {
       this.resources[k] = (this.resources[k] || 0) + (productions[k] || 0);
@@ -118,9 +129,44 @@ class PartyState {
     const foodCost = Math.ceil((this.resources.soldiers || 0) * 0.05);
     this.resources.food = Math.max(0, this.resources.food - foodCost);
     // 兵糧不足は兵士が減る
+    let starvation = 0;
     if (this.resources.food === 0 && foodCost > 0) {
-      this.resources.soldiers = Math.max(0, this.resources.soldiers - 5);
+      starvation = 5;
+      this.resources.soldiers = Math.max(0, this.resources.soldiers - starvation);
     }
+
+    // ランダムイベント
+    const event = this._rollEvent();
+    this.lastEvent = event;
+    if (event) {
+      const e = event.effect;
+      if (e.gold) this.resources.gold = Math.max(0, this.resources.gold + e.gold);
+      if (e.food) this.resources.food = Math.max(0, this.resources.food + e.food);
+      if (e.materials) this.resources.materials = Math.max(0, this.resources.materials + e.materials);
+      if (e.soldiers) this.resources.soldiers = Math.max(0, this.resources.soldiers + e.soldiers);
+    }
+
+    return { productions, foodCost, starvation, event };
+  }
+
+  _rollEvent() {
+    if (Math.random() > 0.45) return null; // 45%でイベント発生
+    const events = [
+      { id: 'harvest', name: '豊作', desc: '今期は豊作だった！', effect: { food: 60 }, weight: 4 },
+      { id: 'merchant', name: '商隊到着', desc: '異国の商隊が訪れた。', effect: { gold: 50, materials: 20 }, weight: 3 },
+      { id: 'recruit', name: '志願兵', desc: '志願兵が集まった。', effect: { soldiers: 15 }, weight: 4 },
+      { id: 'mine', name: '鉱脈発見', desc: '鉱脈が発見された！', effect: { materials: 40 }, weight: 2 },
+      { id: 'drought', name: '日照り', desc: '日照りで作物が枯れた…', effect: { food: -40 }, weight: 3 },
+      { id: 'raid', name: '盗賊襲来', desc: '盗賊に襲われた！', effect: { gold: -30, soldiers: -5 }, weight: 2 },
+      { id: 'fortune', name: '思わぬ授かりもの', desc: '埋蔵金を発見！', effect: { gold: 100 }, weight: 1 },
+    ];
+    const totalWeight = events.reduce((s, e) => s + e.weight, 0);
+    let r = Math.random() * totalWeight;
+    for (const e of events) {
+      r -= e.weight;
+      if (r <= 0) return e;
+    }
+    return events[0];
   }
 
   spendGold(amount) {
@@ -133,6 +179,34 @@ class PartyState {
     if (this.resources.materials < amount) return false;
     this.resources.materials -= amount;
     return true;
+  }
+
+  // 特訓: 金を払ってXP付与
+  trainHero(heroKey, xpAmount) {
+    const m = this.getMember(heroKey);
+    if (!m) return null;
+    const before = { level: m.level, xp: m.xp, xpToNext: xpToNextLevel(m.level) };
+    let remaining = xpAmount;
+    let curLevel = m.level;
+    let curXp = m.xp;
+    let curMax = xpToNextLevel(curLevel);
+    let levelsGained = 0;
+    while (remaining > 0) {
+      const space = curMax - curXp;
+      if (remaining < space) {
+        curXp += remaining;
+        remaining = 0;
+      } else {
+        remaining -= space;
+        curLevel++;
+        curXp = 0;
+        curMax = xpToNextLevel(curLevel);
+        levelsGained++;
+      }
+    }
+    m.level = curLevel;
+    m.xp = curXp;
+    return { before, after: { level: m.level, xp: m.xp, xpToNext: xpToNextLevel(m.level) }, levelsGained };
   }
 
   // 領地状態管理

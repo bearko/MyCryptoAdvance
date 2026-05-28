@@ -381,6 +381,77 @@
   display: flex; justify-content: center;
 }
 
+/* ---------- Dojo / Training ---------- */
+.dojo-tiers { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.dojo-tier {
+  flex: 1; min-width: 100px; padding: 0.55rem;
+  background: var(--panel-2); border: 1.5px solid var(--border);
+  border-radius: var(--radius-md); cursor: pointer;
+  text-align: center; transition: all 0.15s;
+}
+.dojo-tier:hover { border-color: var(--accent); }
+.dojo-tier--selected {
+  border-color: var(--byakko); background: rgba(255,215,0,0.1);
+  box-shadow: 0 0 8px rgba(255,215,0,0.3);
+}
+.dojo-tier__name { font-size: 0.82rem; font-weight: 800; color: var(--text); }
+.dojo-tier__detail { font-size: 0.7rem; color: var(--muted); margin-top: 0.1rem; }
+.hb-subtitle {
+  font-size: 0.8rem; font-weight: 800; color: var(--accent);
+  margin: 0.6rem 0 0.3rem;
+}
+.dojo-hero-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.dojo-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.45rem 0.6rem; background: var(--panel-2);
+  border: 1.5px solid var(--border); border-radius: var(--radius-md);
+  cursor: pointer; width: 100%; color: var(--text); font-family: inherit;
+  transition: all 0.15s;
+}
+.dojo-row:hover { border-color: var(--byakko); }
+.dojo-row img { width: 38px; height: 38px; border-radius: 50%; image-rendering: pixelated; }
+.dojo-row__info { flex: 1; text-align: left; }
+.dojo-row__name { font-size: 0.82rem; font-weight: 800; }
+.dojo-row__lv { font-size: 0.7rem; color: var(--muted); }
+.dojo-row__action {
+  font-size: 0.75rem; font-weight: 800; color: var(--byakko);
+  padding: 0.3rem 0.7rem; background: rgba(255,215,0,0.15);
+  border-radius: 999px; border: 1px solid rgba(255,215,0,0.5);
+}
+
+/* ---------- Facility ---------- */
+.facility-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.facility-card {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 0.6rem;
+}
+.facility-card__icon {
+  font-size: 1.5rem; width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--panel); border-radius: 50%;
+  border: 2px solid var(--accent);
+}
+.facility-card__info { flex: 1; min-width: 0; }
+.facility-card__name { font-size: 0.85rem; font-weight: 800; color: var(--text); }
+.facility-card__lv { color: var(--accent); margin-left: 0.4rem; font-size: 0.72rem; }
+.facility-card__desc { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
+.facility-card__maxed {
+  font-size: 0.72rem; color: var(--byakko); font-weight: 800;
+  background: rgba(255,215,0,0.15); padding: 0.2rem 0.5rem; border-radius: 999px;
+}
+
+/* ---------- Event Modal ---------- */
+.event-modal--good { border-color: var(--genbu); }
+.event-modal--bad { border-color: var(--damage); }
+.event-effect {
+  font-size: 1rem; font-weight: 800; text-align: center;
+  padding: 0.6rem; background: var(--panel-2); border-radius: 8px;
+  margin: 0.6rem 0; font-variant-numeric: tabular-nums;
+}
+.event-modal--good .event-effect { color: var(--genbu); }
+.event-modal--bad .event-effect { color: var(--damage); }
+
 /* ---------- Toast ---------- */
 .hb-toast {
   position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
