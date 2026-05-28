@@ -319,38 +319,86 @@ async function showStageClearResult(result, rewards) {
     partyEl.appendChild(row);
   });
 
-  await sleep(500);
-  await animatePartyXpGain(rewards.snapshots);
-
+  // スキップ機構: 画面タップ or ボタン押下で動作
   return new Promise(resolve => {
-    $('resultNext').addEventListener('click', async () => {
+    const ctx = { skip: false, finished: false };
+    let resolved = false;
+
+    const advance = () => {
+      if (resolved) return;
+      resolved = true;
       audio.playSe('confirm');
       resultLayer.classList.add('hidden');
       resultLayer.innerHTML = '';
       resolve();
+    };
+
+    const onTap = (e) => {
+      // ボタン側のクリックでも同じ経路を辿る
+      if (ctx.finished) {
+        advance();
+      } else {
+        // アニメ中: スキップ要求
+        ctx.skip = true;
+      }
+    };
+
+    // 画面どこでもタップでスキップ/進行
+    resultLayer.addEventListener('click', onTap);
+    // 「ワールドマップへ」ボタンは最初から押せるように
+    $('resultNext').addEventListener('click', (e) => { e.stopPropagation(); onTap(e); });
+    // タップ案内をボタン上に表示
+    const btn = $('resultNext');
+    btn.textContent = 'タップでスキップ';
+    btn.classList.add('result__btn--skipping');
+
+    sleep(500).then(() => animatePartyXpGain(rewards.snapshots, ctx)).then(() => {
+      // 最終状態を適用
+      finalizeSnapshots(rewards.snapshots);
+      ctx.finished = true;
+      btn.textContent = 'ワールドマップへ';
+      btn.classList.remove('result__btn--skipping');
     });
   });
 }
 
-async function animatePartyXpGain(snapshots) {
+function finalizeSnapshots(snapshots) {
   for (const snap of snapshots) {
     const row = document.querySelector(`.party-row[data-hero-key="${snap.heroKey}"]`);
     if (!row) continue;
+    const fill = row.querySelector('.xp-bar__fill');
+    const cur = row.querySelector('.xp-cur');
+    const maxEl = row.querySelector('.xp-max');
+    const lvNum = row.querySelector('.lv-num');
+    lvNum.textContent = snap.after.level;
+    maxEl.textContent = snap.after.xpToNext;
+    cur.textContent = snap.after.xp;
+    fill.style.width = `${(snap.after.xp / snap.after.xpToNext) * 100}%`;
+    if (snap.leveledUp) {
+      row.classList.add('party-row--levelup');
+      setTimeout(() => row.classList.remove('party-row--levelup'), 400);
+    }
+  }
+}
 
-    // 1体あたり最大2秒に収めるため、イベント数で速度を圧縮
+async function animatePartyXpGain(snapshots, ctx) {
+  for (const snap of snapshots) {
+    if (ctx && ctx.skip) return; // スキップ要求 → 残りは finalize に任せる
+    const row = document.querySelector(`.party-row[data-hero-key="${snap.heroKey}"]`);
+    if (!row) continue;
+
     const evCount = snap.events.length || 1;
-    // 各イベントの目標時間 = 2000ms / 件数。最小80ms、最大400ms。
     const perEv = Math.max(80, Math.min(400, 2000 / evCount));
-    // レベルアップ複数時は最終レベルだけ大演出、途中は短いフラッシュのみ
     const lvEvents = snap.events.filter(e => e.type === 'levelup');
     const lastLvEvent = lvEvents[lvEvents.length - 1];
 
     for (const ev of snap.events) {
+      if (ctx && ctx.skip) return;
       if (ev.type === 'xp') {
-        await animateXpBar(row, ev.from, ev.to, ev.max, perEv);
+        await animateXpBar(row, ev.from, ev.to, ev.max, perEv, ctx);
       } else if (ev.type === 'levelup') {
         const isLast = ev === lastLvEvent;
-        await animateLevelUp(row, ev.newLevel, isLast ? perEv : Math.min(perEv, 150));
+        await animateLevelUp(row, ev.newLevel, isLast ? perEv : Math.min(perEv, 150), ctx);
         const fill = row.querySelector('.xp-bar__fill');
         const cur = row.querySelector('.xp-cur');
         fill.style.width = '0%';
@@ -360,7 +408,7 @@ async function animatePartyXpGain(snapshots) {
   }
 }
 
-function animateXpBar(row, from, to, max, targetMs) {
+function animateXpBar(row, from, to, max, targetMs, ctx) {
   return new Promise(resolve => {
     const fill = row.querySelector('.xp-bar__fill');
     const cur = row.querySelector('.xp-cur');
@@ -369,6 +417,7 @@ function animateXpBar(row, from, to, max, targetMs) {
     const duration = targetMs || Math.min(600, 150 + (to - from) * 25);
     const start = performance.now();
     function step(now) {
+      if (ctx && ctx.skip) { resolve(); return; }
       const t = Math.min(1, (now - start) / duration);
       const eased = t * (2 - t);
       const val = from + (to - from) * eased;
@@ -381,8 +430,9 @@ function animateXpBar(row, from, to, max, targetMs) {
   });
 }
 
-function animateLevelUp(row, newLevel, durationMs) {
+function animateLevelUp(row, newLevel, durationMs, ctx) {
   return new Promise(resolve => {
+    if (ctx && ctx.skip) { resolve(); return; }
     audio.playSe('levelup');
     const fx = row.querySelector('.party-row__levelup-fx');
     const lvNum = row.querySelector('.lv-num');
