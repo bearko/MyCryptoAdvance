@@ -84,10 +84,10 @@ export const HEROES = {
     mchStats: { hp: 200, phy: 50, int: 160, agi: 90 },
     atkSpeed: 0.7, atkRange: 140, atkType: 'magic', atkPattern: 'field' },
 
-  // 侵略者（ワールド1ボス）
+  // 侵略者（ワールド1ボス）大幅強化
   attila:     { id: 'attila', name: 'アッティラ', imageId: 3047, faction: FACTION.INVADER,
-    mchStats: { hp: 600, phy: 200, int: 100, agi: 80 },
-    atkSpeed: 1.5, atkRange: 80, atkType: 'melee', atkPattern: 'wave' },
+    mchStats: { hp: 1500, phy: 350, int: 150, agi: 90 },
+    atkSpeed: 1.8, atkRange: 95, atkType: 'melee', atkPattern: 'wave' },
 
   // 市民
   etheremon:  { id: 'etheremon', name: 'ETHEREMON-RED', imageId: 3001, faction: FACTION.CITIZEN,
@@ -97,6 +97,15 @@ export const HEROES = {
   douran:     { id: 'douran', name: 'DOURAN', imageId: 3054, faction: FACTION.CITIZEN,
     mchStats: { hp: 200, phy: 100, int: 60, agi: 70 },
     atkSpeed: 0.9, atkRange: 50, atkType: 'melee', atkPattern: 'slash' },
+};
+
+// 領地難易度→基礎ステータス倍率（フェーズ倍率に乗算）
+export const DIFFICULTY_MUL = {
+  1: 0.85, // 中山道, 木曽 等の入門
+  2: 1.0,  // 美濃, 信濃
+  3: 1.2,  // 尾張, 近江
+  4: 1.5,
+  5: 1.8,  // アッティラ城
 };
 
 // MCS式エクステンション。武器として機能。
@@ -305,6 +314,43 @@ export const TERRITORY_STAGES = {
 export const RECRUIT_POOL = [
   { heroKey: 'douran',     cost: 300 },
   { heroKey: 'etheremon',  cost: 400 },
+];
+
+// ============================================================
+// 時間制エスカレーション (フェーズシステム)
+// ============================================================
+// 15秒ごとにフェーズが進行。敵の種類/能力/XPが上昇する
+export const PHASE_CONFIG = {
+  durationSec: 15, // 1フェーズの秒数
+  total: 5,
+  phases: [
+    { num: 1, name: '導入',      tiers: [1],          hpMul: 1.0, dmgMul: 1.0, xpMul: 1.0, color: '#5ecf8a' },
+    { num: 2, name: '進攻',      tiers: [1, 2],       hpMul: 1.2, dmgMul: 1.15, xpMul: 1.2, color: '#ffd700' },
+    { num: 3, name: '激戦',      tiers: [2, 3],       hpMul: 1.4, dmgMul: 1.30, xpMul: 1.5, color: '#ff8844' },
+    { num: 4, name: '危機',      tiers: [3, 4],       hpMul: 1.7, dmgMul: 1.50, xpMul: 2.0, color: '#ff4040' },
+    { num: 5, name: '絶望',      tiers: [4, 5],       hpMul: 2.2, dmgMul: 1.80, xpMul: 3.0, color: '#aa0000' },
+  ],
+};
+
+// 各エネミーのTier分類（フェーズで解放される順）
+export const ENEMY_TIERS = {
+  // Tier 1: ショート系（雑魚）
+  creeper_s: 1, elk_s: 1, heart_s: 1, melissa_s: 1,
+  // Tier 2: トール系
+  creeper_t: 2, elk_t: 2, heart_t: 2, melissa_t: 2,
+  // Tier 3: グランデ系 + バンディS
+  creeper_g: 3, elk_g: 3, heart_g: 3, melissa_g: 3, bandit_s: 3,
+  // Tier 4: ヴェンティ / バンディT / ベーグル
+  creeper_v: 4, bandit_t: 4, bagel_s: 4, bagel_v: 4,
+  // Tier 5: フラペチーノ系（極悪）
+  creeper_f: 5, melissa_f: 5, elk_f: 5, bandit_f: 5,
+};
+
+// 中ボス: 特定フェーズで強敵が出現
+export const MID_BOSSES = [
+  { phase: 3, type: 'bandit_t',  scale: 1.8, hpMul: 5,  dmgMul: 1.6, xpReward: 60 },
+  { phase: 4, type: 'bagel_v',   scale: 2.0, hpMul: 6,  dmgMul: 1.8, xpReward: 100 },
+  { phase: 5, type: 'bandit_f',  scale: 2.2, hpMul: 8,  dmgMul: 2.0, xpReward: 150 },
 ];
 
 // 施設定義: 本拠地パッシブ強化

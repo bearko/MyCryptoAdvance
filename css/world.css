@@ -475,6 +475,17 @@
   100% { opacity: 0; transform: translate(-50%, -10px); }
 }
 
+/* ---------- Defeat Hint ---------- */
+.defeat-hint {
+  font-size: 0.78rem; color: var(--accent);
+  text-align: left; line-height: 1.9;
+  background: rgba(196,163,90,0.08);
+  border: 1.5px dashed rgba(196,163,90,0.5);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.9rem;
+  margin: 0.5rem 0;
+}
+
 /* ---------- Battle Rank ---------- */
 .result__rank {
   display: flex; align-items: center; gap: 0.6rem;

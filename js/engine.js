@@ -3,7 +3,7 @@
    Vampire Survivors-style action engine
    ============================================================ */
 
-import { ASSETS, ENEMY_TYPES, STAGE_WAVES, TACTIC, LEVELUP_CHOICES, HEROES, MCS, EXTENSIONS, xpToNextLevel } from './constants.js';
+import { ASSETS, ENEMY_TYPES, STAGE_WAVES, TACTIC, LEVELUP_CHOICES, HEROES, MCS, EXTENSIONS, xpToNextLevel, PHASE_CONFIG, ENEMY_TIERS, MID_BOSSES, DIFFICULTY_MUL } from './constants.js';
 import { partyState } from './state.js';
 import { audio } from './audio.js';
 
@@ -96,6 +96,14 @@ export class GameEngine {
     this.finalBossDefeated = !this.finalBossKey;
     this.stageTime = 0;
     this.ambientTimer = 0;
+    // フェーズシステム
+    this.currentPhase = 1;
+    this.nextPhaseAt = PHASE_CONFIG.durationSec;
+    this.midBossesSpawned = new Set();
+    // 難易度倍率（領地のdifficultyから）
+    this.difficultyMul = stage.difficulty ? (DIFFICULTY_MUL[stage.difficulty] || 1.0) : 1.0;
+    // 累積XP（戦闘外で配布）
+    this.bonusXp = 0;
     this.kills = 0;
     this.totalEnemies = 0;
     this.spawnedCount = 0;
@@ -220,6 +228,7 @@ export class GameEngine {
       this.screenShakeY = (Math.random() - 0.5) * this.screenShake * 20;
     } else { this.screenShakeX = 0; this.screenShakeY = 0; }
 
+    this._updatePhase(dt);
     this._updateFieldSpawn(dt);
     this._updatePlayer(dt);
     this._updateAllies(dt);
@@ -239,7 +248,7 @@ export class GameEngine {
     }
     if (this.reachedExit && this.onVictory) {
       this.stop();
-      this.onVictory({ kills: this.kills, time: this.stageTime, maxCombo: this.maxCombo });
+      this.onVictory(this.getResults());
     }
   }
 
@@ -252,6 +261,67 @@ export class GameEngine {
     if (dx * dx + dy * dy < this.exit.radius * this.exit.radius) {
       this.reachedExit = true;
     }
+  }
+
+  _updatePhase(dt) {
+    // 経過時間から現在のフェーズを決定
+    const newPhase = Math.min(PHASE_CONFIG.total, Math.floor(this.stageTime / PHASE_CONFIG.durationSec) + 1);
+    if (newPhase !== this.currentPhase) {
+      this.currentPhase = newPhase;
+      this._onPhaseChange(newPhase);
+    }
+    this.nextPhaseAt = Math.max(0, newPhase * PHASE_CONFIG.durationSec - this.stageTime);
+  }
+
+  _onPhaseChange(phase) {
+    // フェーズ昇格演出
+    this.screenShake = Math.max(this.screenShake, 0.4);
+    audio.playSe('critical');
+    this.phaseFlashTime = 1.5; // 上部HUDで点滅させる
+    // 中ボスのスポーン
+    for (const mb of MID_BOSSES) {
+      if (mb.phase === phase && !this.midBossesSpawned.has(phase)) {
+        this.midBossesSpawned.add(phase);
+        this._spawnMidBoss(mb);
+      }
+    }
+  }
+
+  _spawnMidBoss(mb) {
+    const def = ENEMY_TYPES[mb.type];
+    if (!def) return;
+    // プレイヤーから少し離れた位置
+    const angle = Math.random() * PI2;
+    const dist = Math.max(this.vw, this.vh) * 0.55;
+    const px = this.player.x + Math.cos(angle) * dist;
+    const py = this.player.y + Math.sin(angle) * dist;
+    const x = Math.max(40, Math.min(this.fieldSize - 40, px));
+    const y = Math.max(40, Math.min(this.fieldSize - 40, py));
+    const hpFinal = def.hp * mb.hpMul * this.difficultyMul;
+    const phyFinal = def.phy * mb.dmgMul * this.difficultyMul;
+    const e = {
+      id: `mb_${Date.now()}_${Math.random()}`,
+      name: `【中ボス】${def.name}`, imageId: def.imageId,
+      x, y, radius: def.radius * mb.scale,
+      hp: hpFinal, maxHp: hpFinal,
+      phy: phyFinal, speed: def.speed * 0.85,
+      xpValue: mb.xpReward, alive: true, flash: 0,
+      spriteKey: `enemy_${def.imageId}`, scale: mb.scale,
+      isBoss: true,
+    };
+    this.enemies.push(e);
+    this.totalEnemies++;
+  }
+
+  _getPhaseDef() {
+    return PHASE_CONFIG.phases[this.currentPhase - 1] || PHASE_CONFIG.phases[0];
+  }
+
+  _getCurrentEnemyPool() {
+    const phaseDef = this._getPhaseDef();
+    return Object.entries(ENEMY_TIERS)
+      .filter(([_, tier]) => phaseDef.tiers.includes(tier))
+      .map(([key]) => key);
   }
 
   _updateFieldSpawn(dt) {
@@ -277,17 +347,25 @@ export class GameEngine {
       }
     }
 
-    // プレイヤー周辺のランダムスポーン
+    // プレイヤー周辺のランダムスポーン（フェーズベースで敵種を変える）
     const amb = this.stage.ambientSpawn;
     if (amb) {
       this.ambientTimer -= dt;
       const nearbyToPlayer = this.enemies.filter(e =>
         (e.x - this.player.x) ** 2 + (e.y - this.player.y) ** 2 < 600 * 600
       ).length;
-      if (this.ambientTimer <= 0 && nearbyToPlayer < (amb.maxAround || 60)) {
-        const type = amb.enemies[Math.floor(Math.random() * amb.enemies.length)];
-        this._spawnEnemyAt(type, this.player.x, this.player.y, 380 + Math.random() * 120);
-        this.ambientTimer = amb.interval;
+      // 上限もフェーズで増加
+      const phaseDef = this._getPhaseDef();
+      const maxAround = Math.floor((amb.maxAround || 60) * (0.7 + this.currentPhase * 0.15));
+      // 間隔もフェーズが進むほど短く
+      const interval = (amb.interval || 0.15) * Math.max(0.4, 1.2 - this.currentPhase * 0.15);
+      if (this.ambientTimer <= 0 && nearbyToPlayer < maxAround) {
+        const pool = this._getCurrentEnemyPool();
+        if (pool.length > 0) {
+          const type = pool[Math.floor(Math.random() * pool.length)];
+          this._spawnEnemyAt(type, this.player.x, this.player.y, 380 + Math.random() * 120);
+        }
+        this.ambientTimer = interval;
       }
     }
 
@@ -350,14 +428,23 @@ export class GameEngine {
     const angle = Math.random() * PI2;
     const x = Math.max(20, Math.min(this.fieldSize - 20, cx + Math.cos(angle) * dist));
     const y = Math.max(20, Math.min(this.fieldSize - 20, cy + Math.sin(angle) * dist));
+    // フェーズ × 難易度 のステータス倍率
+    const phaseDef = this._getPhaseDef();
+    const hpMul = phaseDef.hpMul * this.difficultyMul;
+    const dmgMul = phaseDef.dmgMul * this.difficultyMul;
+    const xpMul = phaseDef.xpMul * Math.max(1.0, this.difficultyMul);
+    const hp = Math.ceil(def.hp * hpMul);
+    const phy = Math.ceil(def.phy * dmgMul);
+    const xpValue = Math.ceil(def.xp * xpMul);
     const e = {
       id: `e_${Date.now()}_${Math.random()}`,
       name: def.name, imageId: def.imageId,
       x, y, radius: def.radius,
-      hp: def.hp, maxHp: def.hp,
-      phy: def.phy, speed: def.speed,
-      xpValue: def.xp, alive: true, flash: 0,
+      hp, maxHp: hp,
+      phy, speed: def.speed,
+      xpValue, alive: true, flash: 0,
       spriteKey: `enemy_${def.imageId}`, scale: 1,
+      tier: ENEMY_TIERS[typeKey] || 1,
     };
     this.enemies.push(e);
     this.spawnedCount++;
@@ -654,6 +741,8 @@ export class GameEngine {
     if (enemy.hp <= 0) {
       enemy.alive = false;
       this.kills++;
+      // XPは戦闘外で配布するため累積（敵tier/フェーズ反映済みの値）
+      this.bonusXp += (enemy.xpValue || 0);
       this.combo++;
       this.comboTimer = 2.0;
       if (this.combo > this.maxCombo) this.maxCombo = this.combo;
@@ -801,6 +890,84 @@ export class GameEngine {
     this._drawParticles(ctx, cam);
     this._drawCombo(ctx);
     this._drawMinimap(ctx);
+    this._drawPhaseHud(ctx);
+  }
+
+  _drawPhaseHud(ctx) {
+    const phaseDef = this._getPhaseDef();
+    if (!phaseDef) return;
+    const isMobile = this.vw < 600;
+    // 中央上部に配置
+    const cx = this.vw / 2;
+    const top = isMobile ? 32 : 36;
+    ctx.save();
+
+    // フェーズ昇格フラッシュ
+    if (this.phaseFlashTime > 0) {
+      this.phaseFlashTime -= 0.016;
+      const alpha = Math.max(0, Math.min(0.5, this.phaseFlashTime / 1.5));
+      ctx.fillStyle = phaseDef.color;
+      ctx.globalAlpha = alpha;
+      ctx.fillRect(0, 0, this.vw, this.vh);
+      ctx.globalAlpha = 1;
+    }
+
+    // 背景バー
+    const barW = Math.min(this.vw - 40, isMobile ? 240 : 320);
+    const barH = isMobile ? 22 : 26;
+    const barX = cx - barW / 2;
+    const barY = top - barH / 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
+    // フェーズカラー
+    ctx.fillStyle = phaseDef.color + '40';
+    ctx.fillRect(barX, barY, barW, barH);
+    // カウントダウン進捗バー
+    const progRatio = 1 - (this.nextPhaseAt / PHASE_CONFIG.durationSec);
+    ctx.fillStyle = phaseDef.color;
+    ctx.fillRect(barX, barY + barH - 3, barW * progRatio, 3);
+    // ボーダー
+    ctx.strokeStyle = phaseDef.color;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // テキスト
+    ctx.font = `900 ${isMobile ? 12 : 14}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 4;
+    const phaseLabel = `PHASE ${this.currentPhase}/${PHASE_CONFIG.total} ${phaseDef.name}`;
+    const countdown = this.currentPhase < PHASE_CONFIG.total
+      ? `次まで ${Math.ceil(this.nextPhaseAt)}s`
+      : '最終局面';
+    ctx.fillText(`${phaseLabel}    ${countdown}`, cx, top);
+    ctx.shadowBlur = 0;
+
+    // 次フェーズで解放される敵プレビュー（フェーズが最後でなければ）
+    if (this.currentPhase < PHASE_CONFIG.total && this.nextPhaseAt < 10) {
+      const nextPhaseDef = PHASE_CONFIG.phases[this.currentPhase];
+      const newTiers = nextPhaseDef.tiers.filter(t => !phaseDef.tiers.includes(t));
+      if (newTiers.length > 0) {
+        const newEnemies = Object.entries(ENEMY_TIERS)
+          .filter(([_, tier]) => newTiers.includes(tier))
+          .slice(0, 3)
+          .map(([key]) => ENEMY_TYPES[key]?.name)
+          .filter(Boolean);
+        if (newEnemies.length > 0) {
+          const previewY = top + barH / 2 + 12;
+          ctx.font = `700 ${isMobile ? 10 : 11}px sans-serif`;
+          ctx.fillStyle = nextPhaseDef.color;
+          ctx.shadowColor = 'rgba(0,0,0,0.9)';
+          ctx.shadowBlur = 3;
+          ctx.fillText(`⚠ 解放間近: ${newEnemies.join(' / ')}`, cx, previewY);
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+
+    ctx.restore();
   }
 
   _drawExit(ctx, cam) {
@@ -1195,7 +1362,13 @@ export class GameEngine {
   }
 
   getResults() {
-    return { kills: this.kills, time: this.stageTime, maxCombo: this.maxCombo };
+    return {
+      kills: this.kills,
+      time: this.stageTime,
+      maxCombo: this.maxCombo,
+      bonusXp: this.bonusXp,
+      reachedPhase: this.currentPhase,
+    };
   }
 
   equipWeapon(atkType, atkPattern, phyBonus = 0) {
