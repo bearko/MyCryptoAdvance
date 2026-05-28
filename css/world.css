@@ -490,8 +490,99 @@
   border: 1px solid rgba(0,0,0,0.6);
 }
 
-.wm-next-btn {
+/* ---------- Time controls ---------- */
+.wm-time-ctrl {
+  display: flex; gap: 0.25rem;
+}
+.wm-time-btn {
+  min-width: 38px; padding: 0.4rem 0.6rem;
+  background: var(--panel-2); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm);
+  font-size: 0.85rem; font-weight: 800;
+  cursor: pointer; transition: all 0.15s;
+}
+.wm-time-btn:hover { border-color: var(--accent); color: var(--accent); }
+.wm-time-btn--active {
+  background: var(--accent); color: #1a1420; border-color: var(--accent);
+}
+.wm-home-btn {
   font-size: 0.85rem; padding: 0.5rem 1rem;
+}
+.wm-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 0.6rem;
+}
+
+.wm-squad--fighting {
+  border-color: var(--damage);
+  animation: squad-fight 1s ease-in-out infinite;
+}
+@keyframes squad-fight {
+  0%,100% { box-shadow: 0 0 8px rgba(231,96,96,0.4); }
+  50%     { box-shadow: 0 0 18px rgba(231,96,96,0.8); }
+}
+.wm-squad__fight {
+  position: absolute; bottom: -10px; right: -18px;
+  background: var(--damage); color: #fff;
+  font-size: 0.6rem; font-weight: 900;
+  padding: 0.05rem 0.35rem; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.6); white-space: nowrap;
+}
+
+/* ---------- Dispatch mode toggle ---------- */
+.dispatch-mode {
+  display: flex; gap: 0.6rem; margin: 0.3rem 0; flex-wrap: wrap;
+}
+.dispatch-mode label {
+  display: flex; align-items: center; gap: 0.25rem;
+  font-size: 0.74rem; color: var(--text);
+  cursor: pointer; padding: 0.2rem 0.4rem;
+  background: var(--panel); border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.dispatch-mode input[type="radio"] {
+  accent-color: var(--accent);
+}
+.dispatch-confirm {
+  margin-top: 0.4rem; font-size: 0.78rem;
+}
+
+/* ---------- Toast ---------- */
+.wm-toast-host {
+  position: absolute; top: 12px; left: 12px;
+  display: flex; flex-direction: column; gap: 0.4rem;
+  z-index: 70; pointer-events: none;
+  max-width: calc(100% - 160px);
+}
+.wm-toast {
+  background: rgba(20,16,30,0.92); backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid var(--accent); border-radius: var(--radius-md);
+  padding: 0.5rem 0.7rem;
+  display: flex; gap: 0.5rem; align-items: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  animation: wm-toast-in 0.4s ease;
+  max-width: 320px;
+  pointer-events: auto;
+}
+.wm-toast img {
+  width: 36px; height: 36px; border-radius: 50%; image-rendering: pixelated;
+}
+.wm-toast__title { font-size: 0.85rem; font-weight: 900; color: var(--accent); }
+.wm-toast__sub { font-size: 0.7rem; color: var(--muted); }
+.wm-toast--victory { border-color: var(--genbu); }
+.wm-toast--victory .wm-toast__title { color: var(--genbu); }
+.wm-toast--defeat { border-color: var(--damage); }
+.wm-toast--defeat .wm-toast__title { color: var(--damage); }
+.wm-toast--event { border-color: var(--byakko); }
+.wm-toast--event .wm-toast__title { color: var(--byakko); }
+.wm-toast--fade { animation: wm-toast-out 0.6s forwards; }
+@keyframes wm-toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes wm-toast-out {
+  to { opacity: 0; transform: translateY(-12px); }
 }
 
 .auto-spinner {
