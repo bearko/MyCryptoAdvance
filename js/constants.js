@@ -160,6 +160,18 @@ export const STAGE_WAVES = {
       interval: 0.15,
       maxAround: 80,
     },
+    // 出口関門: 強敵を密集させる
+    exitGuard: {
+      enemies: ['bandit_t', 'bandit_s', 'melissa_g', 'elk_g', 'heart_g', 'creeper_v', 'bagel_s', 'bagel_v'],
+      eliteEnemies: ['bandit_f', 'melissa_f', 'elk_f', 'creeper_f'],
+      // 出口を中心とした守備半径
+      guardRadius: 450,
+      // 配置上限と再湧き間隔
+      maxGuards: 60,
+      spawnInterval: 0.08,
+      eliteCount: 3,
+      eliteSpawnInterval: 1.5,
+    },
   },
 };
 
