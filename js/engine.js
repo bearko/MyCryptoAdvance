@@ -258,6 +258,56 @@ export class GameEngine {
       }
     }
 
+    // 出口関門: 出口周辺に強敵を密集させる（プレイヤーがある程度近づいたら活性化）
+    const eg = this.stage.exitGuard;
+    if (eg && this.exit) {
+      const distToExit = Math.sqrt(
+        (this.player.x - this.exit.x) ** 2 + (this.player.y - this.exit.y) ** 2
+      );
+      // プレイヤーが出口から1200px以内に来たら関門活性化（事前にも少し配備）
+      const active = distToExit < 1200;
+      this._exitGuardTimer = (this._exitGuardTimer || 0) - dt;
+      this._exitEliteTimer = (this._exitEliteTimer || 0) - dt;
+
+      // 出口周辺の敵数をカウント
+      let nearExit = 0;
+      for (const e of this.enemies) {
+        const dx = e.x - this.exit.x, dy = e.y - this.exit.y;
+        if (dx * dx + dy * dy < eg.guardRadius * eg.guardRadius) nearExit++;
+      }
+      const targetMax = active ? eg.maxGuards : Math.floor(eg.maxGuards * 0.4);
+      const interval = active ? eg.spawnInterval : eg.spawnInterval * 3;
+
+      if (this._exitGuardTimer <= 0 && nearExit < targetMax) {
+        const type = eg.enemies[Math.floor(Math.random() * eg.enemies.length)];
+        // 出口の南側（プレイヤー進行方向の手前）を中心に配置
+        const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
+        const dist = eg.guardRadius * (0.3 + Math.random() * 0.7);
+        const x = this.exit.x + Math.cos(angle) * dist;
+        const y = this.exit.y - Math.sin(angle) * dist;
+        this._spawnEnemyAt(type, x, y, 0);
+        this._exitGuardTimer = interval;
+      }
+
+      // エリート: ボス級が少数常駐
+      if (active && eg.eliteEnemies && this._exitEliteTimer <= 0) {
+        const eliteCount = this.enemies.filter(e => {
+          const dx = e.x - this.exit.x, dy = e.y - this.exit.y;
+          return dx * dx + dy * dy < eg.guardRadius * eg.guardRadius
+            && eg.eliteEnemies.some(ek => ENEMY_TYPES[ek] && ENEMY_TYPES[ek].imageId === e.imageId);
+        }).length;
+        if (eliteCount < (eg.eliteCount || 2)) {
+          const type = eg.eliteEnemies[Math.floor(Math.random() * eg.eliteEnemies.length)];
+          const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
+          const dist = eg.guardRadius * 0.5;
+          const x = this.exit.x + Math.cos(angle) * dist;
+          const y = this.exit.y - Math.sin(angle) * dist;
+          this._spawnEnemyAt(type, x, y, 0);
+        }
+        this._exitEliteTimer = eg.eliteSpawnInterval || 1.5;
+      }
+    }
+
   }
 
   _spawnEnemyAt(typeKey, cx, cy, dist) {
@@ -865,6 +915,21 @@ export class GameEngine {
     for (const a of this.allies) {
       if (!a.alive) continue;
       ctx.beginPath(); ctx.arc(toMapX(a.x), toMapY(a.y), 2.5, 0, PI2); ctx.fill();
+    }
+
+    // 出口関門エリア（赤い警告円）
+    if (this.exit && this.stage && this.stage.exitGuard) {
+      const ex = toMapX(this.exit.x), ey = toMapY(this.exit.y);
+      const gr = (this.stage.exitGuard.guardRadius / fs) * mapSize;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,60,60,0.18)';
+      ctx.beginPath(); ctx.arc(ex, ey, gr, 0, PI2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,80,80,0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(ex, ey, gr, 0, PI2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
     }
 
     // 出口（金の星）
