@@ -1,0 +1,357 @@
+/* ============================================================
+   home-base.js — 本拠地: 内政・募集・武具
+   ============================================================ */
+
+import { HEROES, EXTENSIONS, ASSETS, RECRUIT_POOL, SHOP_EXTENSIONS } from './constants.js';
+import { partyState } from './state.js';
+import { calcAttrs, calcProduction, ATTR_LABEL } from './factory-attrs.js';
+import { audio } from './audio.js';
+
+const $ = id => document.getElementById(id);
+
+export class HomeBase {
+  constructor() {
+    this.layer = $('homeBaseLayer');
+    this.resolve = null;
+    this.tab = 'govern';
+  }
+
+  show() {
+    return new Promise(resolve => {
+      this.resolve = resolve;
+      this.tab = 'govern';
+      this.layer.classList.remove('hidden');
+      this._render();
+    });
+  }
+
+  hide() {
+    this.layer.classList.add('hidden');
+  }
+
+  _render() {
+    const res = partyState.resources;
+    this.layer.innerHTML = `
+      <div class="hb-header">
+        <div class="hb-title">🏯 西軍本陣 — 第${partyState.turn}週</div>
+        <div class="hb-resources">
+          <span class="hb-res hb-res--gold">💰 ${res.gold}</span>
+          <span class="hb-res hb-res--food">🌾 ${res.food}</span>
+          <span class="hb-res hb-res--mat">⚒ ${res.materials}</span>
+          <span class="hb-res hb-res--sold">⚔ ${res.soldiers}</span>
+        </div>
+      </div>
+      <div class="hb-tabs">
+        <button class="hb-tab ${this.tab==='govern'?'hb-tab--active':''}" data-tab="govern">政務</button>
+        <button class="hb-tab ${this.tab==='recruit'?'hb-tab--active':''}" data-tab="recruit">募集</button>
+        <button class="hb-tab ${this.tab==='shop'?'hb-tab--active':''}" data-tab="shop">武具</button>
+        <button class="hb-tab ${this.tab==='roster'?'hb-tab--active':''}" data-tab="roster">家臣</button>
+      </div>
+      <div class="hb-body" id="hbBody"></div>
+      <div class="hb-footer">
+        <button class="btn btn--secondary" id="hbExit">マップへ戻る</button>
+      </div>
+    `;
+
+    this.layer.querySelectorAll('.hb-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        audio.playSe('select');
+        this.tab = btn.dataset.tab;
+        this._render();
+      });
+    });
+    $('hbExit').addEventListener('click', () => this._exit());
+
+    this._renderTab();
+  }
+
+  _renderTab() {
+    const body = $('hbBody');
+    if (this.tab === 'govern') this._renderGovern(body);
+    else if (this.tab === 'recruit') this._renderRecruit(body);
+    else if (this.tab === 'shop') this._renderShop(body);
+    else if (this.tab === 'roster') this._renderRoster(body);
+  }
+
+  _renderGovern(body) {
+    // 各家臣に4つの政務を割り当て、ターン進行で生産を確定
+    const members = partyState.members.filter(m => m.heroKey !== 'player');
+
+    const productionPreview = this._calcProductionPreview();
+
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">政務の割り当て</h3>
+        <p class="hb-section-desc">家臣にタスクを割り当てて領地を発展させましょう。<br>主属性のタスクに就かせると効果UP（×1.5）。</p>
+        <div class="hb-prod-preview">
+          <div class="hb-prod hb-prod--shi">⚔ 兵 +${productionPreview.soldiers}</div>
+          <div class="hb-prod hb-prod--nou">🌾 食 +${productionPreview.food}</div>
+          <div class="hb-prod hb-prod--sho">💰 金 +${productionPreview.gold}</div>
+          <div class="hb-prod hb-prod--kou">⚒ 材 +${productionPreview.materials}</div>
+        </div>
+        <div class="hb-govern-list" id="governList"></div>
+        <button class="btn hb-advance-btn" id="hbAdvance">▶ 1週進める</button>
+      </div>
+    `;
+
+    const list = $('governList');
+    if (members.length === 0) {
+      list.innerHTML = '<div class="hb-empty">家臣がいません。領地を解放して仲間を集めましょう。</div>';
+    } else {
+      members.forEach(m => {
+        const def = HEROES[m.heroKey];
+        if (!def) return;
+        const attrs = calcAttrs(m.heroKey);
+        const cur = partyState.taskAssignments[m.heroKey] || 'idle';
+        const row = document.createElement('div');
+        row.className = 'govern-row';
+        row.innerHTML = `
+          <img class="govern-row__portrait" src="${ASSETS.hero(def.imageId)}" alt="${def.name}" draggable="false">
+          <div class="govern-row__info">
+            <div class="govern-row__name">${def.name} <span class="govern-row__lv">Lv.${m.level}</span></div>
+            <div class="govern-row__attrs">
+              <span class="attr attr--shi ${attrs.primary==='shi'?'attr--primary':''}">士 ${attrs.shi}</span>
+              <span class="attr attr--nou ${attrs.primary==='nou'?'attr--primary':''}">農 ${attrs.nou}</span>
+              <span class="attr attr--sho ${attrs.primary==='sho'?'attr--primary':''}">商 ${attrs.sho}</span>
+              <span class="attr attr--kou ${attrs.primary==='kou'?'attr--primary':''}">工 ${attrs.kou}</span>
+            </div>
+          </div>
+          <div class="govern-row__tasks">
+            <button class="task-btn ${cur==='shi'?'task-btn--active':''}" data-hero="${m.heroKey}" data-task="shi" title="練兵">⚔</button>
+            <button class="task-btn ${cur==='nou'?'task-btn--active':''}" data-hero="${m.heroKey}" data-task="nou" title="農業">🌾</button>
+            <button class="task-btn ${cur==='sho'?'task-btn--active':''}" data-hero="${m.heroKey}" data-task="sho" title="商い">💰</button>
+            <button class="task-btn ${cur==='kou'?'task-btn--active':''}" data-hero="${m.heroKey}" data-task="kou" title="探索">⚒</button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+      list.querySelectorAll('.task-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audio.playSe('select');
+          const hk = btn.dataset.hero;
+          const task = btn.dataset.task;
+          if (partyState.taskAssignments[hk] === task) {
+            delete partyState.taskAssignments[hk];
+          } else {
+            partyState.taskAssignments[hk] = task;
+          }
+          this._renderTab();
+        });
+      });
+    }
+
+    $('hbAdvance').addEventListener('click', () => this._advanceTurn());
+  }
+
+  _calcProductionPreview() {
+    const prod = { gold: 0, food: 0, materials: 0, soldiers: 0 };
+    for (const [heroKey, task] of Object.entries(partyState.taskAssignments)) {
+      if (!partyState.hasHero(heroKey)) continue;
+      const amount = calcProduction(heroKey, task);
+      const resource = ATTR_LABEL[task].resource;
+      prod[resource] += amount;
+    }
+    return prod;
+  }
+
+  _advanceTurn() {
+    audio.playSe('confirm');
+    const prod = this._calcProductionPreview();
+    partyState.advanceTurn(prod);
+    this._render();
+  }
+
+  _renderRecruit(body) {
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">家臣の募集</h3>
+        <p class="hb-section-desc">金を使って仲間を雇い入れます。<br>領地を解放すれば英雄を仲間にできることも。</p>
+        <div class="hb-shop-list" id="recruitList"></div>
+      </div>
+    `;
+    const list = $('recruitList');
+    RECRUIT_POOL.forEach(item => {
+      const def = HEROES[item.heroKey];
+      if (!def) return;
+      const owned = partyState.hasHero(item.heroKey);
+      const attrs = calcAttrs(item.heroKey);
+      const card = document.createElement('div');
+      card.className = `shop-card ${owned ? 'shop-card--owned' : ''}`;
+      card.innerHTML = `
+        <img class="shop-card__icon" src="${ASSETS.hero(def.imageId)}" alt="${def.name}" draggable="false">
+        <div class="shop-card__info">
+          <div class="shop-card__name">${def.name}</div>
+          <div class="shop-card__desc">
+            <span class="attr attr--shi">士${attrs.shi}</span>
+            <span class="attr attr--nou">農${attrs.nou}</span>
+            <span class="attr attr--sho">商${attrs.sho}</span>
+            <span class="attr attr--kou">工${attrs.kou}</span>
+          </div>
+        </div>
+        <div class="shop-card__action">
+          ${owned ? '<span class="shop-card__owned">所属済</span>' : `<button class="btn btn--small" data-hero="${item.heroKey}" data-cost="${item.cost}">💰 ${item.cost}</button>`}
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    list.querySelectorAll('button[data-hero]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const heroKey = btn.dataset.hero;
+        const cost = parseInt(btn.dataset.cost);
+        if (partyState.spendGold(cost)) {
+          partyState.addHero(heroKey);
+          audio.playSe('item');
+          this._render();
+        } else {
+          audio.playSe('defeat');
+          this._showToast('金が足りません');
+        }
+      });
+    });
+  }
+
+  _renderShop(body) {
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">武具の購入</h3>
+        <p class="hb-section-desc">エクステンションを買って家臣を強化。<br>装備は次回の戦闘から反映されます。</p>
+        <div class="hb-shop-list" id="shopList"></div>
+      </div>
+    `;
+    const list = $('shopList');
+    SHOP_EXTENSIONS.forEach(item => {
+      const ext = EXTENSIONS[item.extKey];
+      if (!ext) return;
+      const card = document.createElement('div');
+      card.className = 'shop-card';
+      const bonusParts = [];
+      if (ext.phyBonus) bonusParts.push(`PHY+${ext.phyBonus}`);
+      if (ext.intBonus) bonusParts.push(`INT+${ext.intBonus}`);
+      if (ext.agiBonus) bonusParts.push(`AGI+${ext.agiBonus}`);
+      if (ext.hpBonus) bonusParts.push(`HP+${ext.hpBonus}`);
+      card.innerHTML = `
+        <img class="shop-card__icon" src="${ASSETS.extension(ext.id)}" alt="${ext.name}" draggable="false">
+        <div class="shop-card__info">
+          <div class="shop-card__name">${ext.name}</div>
+          <div class="shop-card__desc">${ext.archetype} / ${bonusParts.join(' ')}</div>
+        </div>
+        <div class="shop-card__action">
+          <button class="btn btn--small" data-ext="${item.extKey}" data-cost="${item.cost}">💰 ${item.cost}</button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    list.querySelectorAll('button[data-ext]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const extKey = btn.dataset.ext;
+        const cost = parseInt(btn.dataset.cost);
+        if (partyState.spendGold(cost)) {
+          // 装備対象を選ぶ
+          this._showEquipModal(extKey);
+        } else {
+          audio.playSe('defeat');
+          this._showToast('金が足りません');
+        }
+      });
+    });
+  }
+
+  _showEquipModal(extKey) {
+    const ext = EXTENSIONS[extKey];
+    const modal = document.createElement('div');
+    modal.className = 'wm-modal-bg';
+    const list = partyState.members.map(m => {
+      const def = HEROES[m.heroKey];
+      if (!def) return '';
+      const cur = partyState.equipment[m.heroKey];
+      return `<button class="equip-target" data-hero="${m.heroKey}">
+        <img src="${ASSETS.hero(def.imageId)}" draggable="false">
+        <span>${def.name}</span>
+        <span class="equip-target__cur">${cur ? EXTENSIONS[cur]?.name || '' : 'なし'}</span>
+      </button>`;
+    }).join('');
+    modal.innerHTML = `
+      <div class="wm-modal">
+        <h3 class="wm-modal__title">${ext.name} を装備する家臣</h3>
+        <div class="equip-list">${list}</div>
+        <div class="wm-modal__actions">
+          <button class="btn btn--secondary" id="equipCancel">キャンセル</button>
+        </div>
+      </div>
+    `;
+    this.layer.appendChild(modal);
+    modal.querySelectorAll('.equip-target').forEach(b => {
+      b.addEventListener('click', () => {
+        const hk = b.dataset.hero;
+        partyState.equipment[hk] = extKey;
+        audio.playSe('item');
+        modal.remove();
+        this._render();
+        this._showToast(`${HEROES[hk].name}に装備しました`);
+      });
+    });
+    modal.querySelector('#equipCancel').addEventListener('click', () => {
+      // 返金（キャンセル時）
+      const cost = SHOP_EXTENSIONS.find(s => s.extKey === extKey).cost;
+      partyState.resources.gold += cost;
+      audio.playSe('select');
+      modal.remove();
+      this._render();
+    });
+  }
+
+  _renderRoster(body) {
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">家臣一覧</h3>
+        <div class="roster-list" id="rosterList"></div>
+      </div>
+    `;
+    const list = $('rosterList');
+    partyState.members.forEach(m => {
+      const def = HEROES[m.heroKey];
+      if (!def) return;
+      const attrs = calcAttrs(m.heroKey);
+      const equipKey = partyState.equipment[m.heroKey];
+      const equip = equipKey ? EXTENSIONS[equipKey] : null;
+      const card = document.createElement('div');
+      card.className = 'roster-card';
+      card.innerHTML = `
+        <img class="roster-card__portrait" src="${ASSETS.hero(def.imageId)}" alt="${def.name}" draggable="false">
+        <div class="roster-card__info">
+          <div class="roster-card__name">${def.name} <span class="roster-card__lv">Lv.${m.level}</span></div>
+          <div class="roster-card__primary">主属性: <b>${ATTR_LABEL[attrs.primary].name}</b> (${ATTR_LABEL[attrs.primary].desc})</div>
+          <div class="roster-card__attrs">
+            <span class="attr attr--shi">士${attrs.shi}</span>
+            <span class="attr attr--nou">農${attrs.nou}</span>
+            <span class="attr attr--sho">商${attrs.sho}</span>
+            <span class="attr attr--kou">工${attrs.kou}</span>
+          </div>
+          <div class="roster-card__equip">装備: ${equip ? equip.name : '—'}</div>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    if (partyState.members.length === 0) {
+      list.innerHTML = '<div class="hb-empty">家臣がいません。</div>';
+    }
+  }
+
+  _showToast(text) {
+    const t = document.createElement('div');
+    t.className = 'hb-toast';
+    t.textContent = text;
+    this.layer.appendChild(t);
+    setTimeout(() => t.remove(), 1800);
+  }
+
+  _exit() {
+    audio.playSe('select');
+    this.hide();
+    if (this.resolve) {
+      const r = this.resolve;
+      this.resolve = null;
+      r();
+    }
+  }
+}

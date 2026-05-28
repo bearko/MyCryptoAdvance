@@ -1,10 +1,9 @@
 /* ============================================================
-   state.js — 永続パーティー状態とステージ報酬
+   state.js — 永続パーティー + 内政資源 + 領地状態
    ============================================================ */
 
 import { xpToNextLevel } from './constants.js';
 
-// 永続パーティー: 仲間ヒーローのレベル/経験値とお金
 class PartyState {
   constructor() {
     this.reset();
@@ -12,13 +11,31 @@ class PartyState {
 
   reset() {
     this.members = []; // [{ heroKey, level, xp }]
-    this.money = 0;
+    // 資源
+    this.resources = { gold: 0, food: 200, materials: 50, soldiers: 100 };
+    // 領地: { id, owner: 'player'|'enemy'|'neutral', conquered: bool }
+    this.territories = {};
+    // ターン (内政1回 = 1週)
+    this.turn = 1;
+    // 出陣編成: 戦闘時に連れていく仲間
+    this.deploy = []; // [heroKey, heroKey, ...] (player除く)
+    // 装備: { heroKey: extKey }
+    this.equipment = { player: 'novice_katana' };
+    // 進捗ログ
+    this.log = [];
+    // 待機（次回戦闘の準備度合い）
+    this.taskAssignments = {}; // { heroKey: 'shi'|'nou'|'sho'|'kou' }
   }
 
   addHero(heroKey) {
     if (!this.members.find(m => m.heroKey === heroKey)) {
       this.members.push({ heroKey, level: 1, xp: 0 });
     }
+  }
+
+  removeHero(heroKey) {
+    const i = this.members.findIndex(m => m.heroKey === heroKey);
+    if (i >= 0) this.members.splice(i, 1);
   }
 
   hasHero(heroKey) {
@@ -35,16 +52,20 @@ class PartyState {
   }
 
   // ステージクリア時の報酬計算 + 配布
-  // 戻り値: 各メンバーの before/after 状態（リザルト演出用）
-  awardStageRewards(kills, timeSec) {
-    const xpAward = Math.floor(100 + kills * 1.5);
-    const moneyAward = Math.floor(50 + kills * 0.8);
-    this.money += moneyAward;
+  awardStageRewards(kills, timeSec, territoryBonus = {}) {
+    const xpAward = Math.floor(80 + kills * 1.5);
+    const goldAward = Math.floor(40 + kills * 0.6) + (territoryBonus.gold || 0);
+    const materialAward = (territoryBonus.materials || 0) + Math.floor(kills * 0.1);
+    const foodAward = (territoryBonus.food || 0);
+
+    this.resources.gold += goldAward;
+    this.resources.materials += materialAward;
+    this.resources.food += foodAward;
 
     const snapshots = [];
     for (const m of this.members) {
       const before = { level: m.level, xp: m.xp, xpToNext: xpToNextLevel(m.level) };
-      const events = []; // [{type: 'xp', from, to, max}, {type: 'levelup', newLevel}]
+      const events = [];
 
       let remaining = xpAward;
       let curLevel = m.level;
@@ -79,7 +100,63 @@ class PartyState {
       });
     }
 
-    return { xpAward, moneyAward, snapshots, money: this.money };
+    return {
+      xpAward, goldAward, materialAward, foodAward,
+      snapshots,
+      resources: { ...this.resources },
+    };
+  }
+
+  // 内政: 1ターン進行
+  advanceTurn(productions) {
+    this.turn++;
+    // productions = { gold, food, materials, soldiers }
+    for (const k of Object.keys(productions)) {
+      this.resources[k] = (this.resources[k] || 0) + (productions[k] || 0);
+    }
+    // 兵糧消費: 兵士数×0.05 / ターン
+    const foodCost = Math.ceil((this.resources.soldiers || 0) * 0.05);
+    this.resources.food = Math.max(0, this.resources.food - foodCost);
+    // 兵糧不足は兵士が減る
+    if (this.resources.food === 0 && foodCost > 0) {
+      this.resources.soldiers = Math.max(0, this.resources.soldiers - 5);
+    }
+  }
+
+  spendGold(amount) {
+    if (this.resources.gold < amount) return false;
+    this.resources.gold -= amount;
+    return true;
+  }
+
+  spendMaterials(amount) {
+    if (this.resources.materials < amount) return false;
+    this.resources.materials -= amount;
+    return true;
+  }
+
+  // 領地状態管理
+  setTerritory(id, data) {
+    this.territories[id] = { ...this.territories[id], ...data };
+  }
+
+  conquerTerritory(id) {
+    this.setTerritory(id, { owner: 'player', conquered: true });
+  }
+
+  isTerritoryConquered(id) {
+    return this.territories[id] && this.territories[id].conquered;
+  }
+
+  // 出陣編成
+  toggleDeploy(heroKey) {
+    const i = this.deploy.indexOf(heroKey);
+    if (i >= 0) this.deploy.splice(i, 1);
+    else if (this.deploy.length < 5) this.deploy.push(heroKey);
+  }
+
+  getDeployedHeroes() {
+    return this.deploy.filter(k => this.hasHero(k));
   }
 }
 

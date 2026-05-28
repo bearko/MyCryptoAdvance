@@ -1,16 +1,18 @@
 /* ============================================================
-   main.js — game flow: prologue → battle → result with rewards
+   main.js — game flow: prologue → stage1 → world map loop
    ============================================================ */
 
-import { ASSETS, HEROES, TACTIC, DIALOGUES, SWARM_ENEMY_IDS } from './constants.js';
+import { ASSETS, HEROES, TACTIC, DIALOGUES, SWARM_ENEMY_IDS, WORLD_MAP, TERRITORY_STAGES, STAGE_WAVES } from './constants.js';
 import { partyState } from './state.js';
 import { DialogueSystem } from './dialogue.js';
 import { GameEngine } from './engine.js';
 import { Controls } from './controls.js';
 import { SceneRenderer, transition, screenShake, flashWhite, sleep } from './effects.js';
 import { audio } from './audio.js';
+import { WorldMap } from './world-map.js';
+import { HomeBase } from './home-base.js';
 
-let dialogue, renderer, engine, controls;
+let dialogue, renderer, engine, controls, worldMap, homeBase;
 const $ = id => document.getElementById(id);
 
 async function preloadImages(urls) {
@@ -49,13 +51,17 @@ async function startGame() {
 
   dialogue = new DialogueSystem();
   renderer = new SceneRenderer();
+  worldMap = new WorldMap();
+  homeBase = new HomeBase();
   audio._ensureCtx();
 
   partyState.reset();
   partyState.addHero('player');
 
   await runPrologue();
-  await runSurvivalBattle();
+  await runStage1();
+  // ステージ1クリア後はワールドマップループへ
+  await runWorldLoop();
 }
 
 async function runPrologue() {
@@ -78,7 +84,80 @@ async function runPrologue() {
   renderer.clear();
 }
 
-async function runSurvivalBattle() {
+async function runStage1() {
+  const result = await runBattleStage({ stageKey: 'sekigahara_field', useDeploy: false });
+  if (result.victory) {
+    await dialogue.show(DIALOGUES.reach_exit);
+    // 本拠地解放
+    partyState.conquerTerritory('home_camp');
+    const rewards = partyState.awardStageRewards(result.kills, result.time);
+    await showStageClearResult({ ...result, terr: { name: '関ヶ原（脱出成功）' } }, rewards);
+  } else {
+    await showDefeatScreen(result);
+    // 敗北時もとりあえずワールドへ
+  }
+}
+
+async function runWorldLoop() {
+  while (true) {
+    const action = await worldMap.show();
+    if (action.action === 'home') {
+      await homeBase.show();
+    } else if (action.action === 'attack') {
+      await attackTerritory(action.terr);
+      // 全制覇判定（任意）
+      if (partyState.isTerritoryConquered('attila_castle')) {
+        await showWorldClear();
+        break;
+      }
+    }
+  }
+}
+
+async function attackTerritory(terr) {
+  await transition('black');
+  renderer.clear();
+  // ステージ設定: TERRITORY_STAGESにあれば使用、なければ sekigahara_field
+  const stageDef = TERRITORY_STAGES[terr.id];
+  if (stageDef) {
+    STAGE_WAVES[terr.id] = { ...stageDef, title: terr.name, bgm: 'pve.mp3' };
+  }
+  await transition('unblack');
+
+  const result = await runBattleStage({ stageKey: stageDef ? terr.id : 'sekigahara_field', useDeploy: true });
+
+  if (result.victory) {
+    await transition('black');
+    renderer.clear();
+    await transition('unblack');
+    renderer.drawGrassland();
+    // 制圧処理
+    partyState.conquerTerritory(terr.id);
+    // 仲間化
+    if (terr.recruit && !partyState.hasHero(terr.recruit)) {
+      partyState.addHero(terr.recruit);
+    }
+    const rewards = partyState.awardStageRewards(result.kills, result.time, terr.reward || {});
+    if (terr.recruit) {
+      const def = HEROES[terr.recruit];
+      await dialogue.show([
+        { speaker: def.name, text: `恩に着る、${HEROES.player.name === '？？？' ? '貴殿' : ''}よ。\n力を貸そう。`, portrait: terr.recruit },
+        { speaker: '', text: `${def.name}が仲間になった！` },
+      ]);
+    } else {
+      await dialogue.show([
+        { speaker: '', text: `${terr.name}を制圧した！` },
+      ]);
+    }
+    renderer.clear();
+    await showStageClearResult({ ...result, terr }, rewards);
+  } else {
+    await transition('black'); renderer.clear(); await transition('unblack');
+    await showDefeatScreen(result);
+  }
+}
+
+async function runBattleStage({ stageKey, useDeploy }) {
   $('sceneLayer').classList.add('hidden');
   $('gameCanvas').classList.remove('hidden');
   $('battleHud').classList.remove('hidden');
@@ -104,26 +183,41 @@ async function runSurvivalBattle() {
   );
   await engine.loadSprites(spriteEntries);
 
+  // パーティー初期化
   const party = [HEROES.player];
-  engine.initStage('sekigahara_field', party, HEROES);
-  engine.equipExtension(engine.player, HEROES.player.startingExtension || 'novice_katana');
+  engine.initStage(stageKey, party, HEROES);
+  // プレイヤー装備
+  const playerExt = partyState.equipment.player || HEROES.player.startingExtension || 'novice_katana';
+  engine.equipExtension(engine.player, playerExt);
+
+  // 出陣編成された仲間を即座に追加（useDeploy=true時）
+  if (useDeploy) {
+    for (const hk of partyState.getDeployedHeroes()) {
+      const def = HEROES[hk];
+      if (!def) continue;
+      engine.addAlly(def);
+      const ally = engine.allies[engine.allies.length - 1];
+      const eqKey = partyState.equipment[hk] || def.startingExtension;
+      if (eqKey && ally) engine.equipExtension(ally, eqKey);
+    }
+  }
 
   audio.playBgm('pve.mp3');
 
   let tacticIndex = 1;
   const tactics = [TACTIC.AGGRESSIVE, TACTIC.BALANCED, TACTIC.DEFENSIVE];
   $('btnTactic').textContent = tactics[tacticIndex].name;
-  $('btnTactic').addEventListener('click', () => {
+  $('btnTactic').onclick = () => {
     tacticIndex = (tacticIndex + 1) % tactics.length;
     engine.setTactic(tactics[tacticIndex]);
     $('btnTactic').textContent = tactics[tacticIndex].name;
     audio.playSe('select');
-  });
+  };
 
-  $('btnPause').addEventListener('click', () => {
+  $('btnPause').onclick = () => {
     if (engine.paused) { engine.resume(); $('btnPause').textContent = '⏸'; }
     else { engine.pause(); $('btnPause').textContent = '▶'; }
-  });
+  };
 
   engine.onEncounter = async (fh) => {
     engine.pause();
@@ -155,46 +249,45 @@ async function runSurvivalBattle() {
   controls.destroy();
   $('sceneLayer').classList.remove('hidden');
 
-  if (result.victory) {
-    audio.playSe('victory');
-    renderer.clear();
-    renderer.drawGrassland();
-    await dialogue.show(DIALOGUES.reach_exit);
-    renderer.clear();
-
-    // ステージ報酬を計算してリザルト表示
-    const rewards = partyState.awardStageRewards(result.kills, result.time);
-    await showStageClearResult(result, rewards);
-  } else {
-    audio.playSe('defeat');
-    await showDefeatScreen(result);
-  }
+  return result;
 }
 
 async function showStageClearResult(result, rewards) {
   await transition('black'); await sleep(400); await transition('unblack');
 
   const container = $('gameContainer');
-  container.innerHTML = `
+  // 既存UIを退避するためHTMLを直接書き換えるのではなく、リザルトレイヤーを使用
+  let resultLayer = $('resultLayer');
+  if (!resultLayer) {
+    resultLayer = document.createElement('div');
+    resultLayer.id = 'resultLayer';
+    resultLayer.className = 'result-layer';
+    container.appendChild(resultLayer);
+  }
+  resultLayer.classList.remove('hidden');
+
+  resultLayer.innerHTML = `
     <div class="result-screen">
       <div class="result__title">STAGE CLEAR</div>
-      <div class="result__sub">第一章ステージ1「関ヶ原の戦場」　— 脱出成功</div>
+      <div class="result__sub">${result.terr ? result.terr.name : ''}</div>
 
       <div class="result__stats">
         <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
         <div class="stat-item"><span class="stat-label">最大コンボ</span><span class="stat-value">${result.maxCombo || 0}</span></div>
-        <div class="stat-item"><span class="stat-label">クリア時間</span><span class="stat-value">${Math.floor(result.time / 60)}:${Math.floor(result.time % 60).toString().padStart(2, '0')}</span></div>
+        <div class="stat-item"><span class="stat-label">時間</span><span class="stat-value">${Math.floor(result.time / 60)}:${Math.floor(result.time % 60).toString().padStart(2, '0')}</span></div>
       </div>
 
       <div class="result__rewards">
         <div class="reward-row"><span class="reward-label">獲得経験値</span><span class="reward-value">+${rewards.xpAward}</span></div>
-        <div class="reward-row"><span class="reward-label">獲得ゴールド</span><span class="reward-value reward-value--money">${rewards.moneyAward} G　(所持 ${rewards.money} G)</span></div>
+        <div class="reward-row"><span class="reward-label">獲得金</span><span class="reward-value reward-value--money">+${rewards.goldAward} G</span></div>
+        ${rewards.materialAward ? `<div class="reward-row"><span class="reward-label">獲得素材</span><span class="reward-value reward-value--mat">+${rewards.materialAward} ⚒</span></div>` : ''}
+        ${rewards.foodAward ? `<div class="reward-row"><span class="reward-label">獲得食料</span><span class="reward-value reward-value--food">+${rewards.foodAward} 🌾</span></div>` : ''}
       </div>
 
       <h3 class="result__section-title">仲間の成長</h3>
       <div class="result__party" id="resultParty"></div>
 
-      <button class="title-screen__press result__btn" id="resultNext">次へ</button>
+      <button class="title-screen__press result__btn" id="resultNext">ワールドマップへ</button>
     </div>`;
 
   const partyEl = $('resultParty');
@@ -221,28 +314,30 @@ async function showStageClearResult(result, rewards) {
     partyEl.appendChild(row);
   });
 
-  // アニメーション再生
-  await sleep(600);
+  await sleep(500);
   await animatePartyXpGain(rewards.snapshots);
 
-  $('resultNext').addEventListener('click', () => location.reload());
+  return new Promise(resolve => {
+    $('resultNext').addEventListener('click', async () => {
+      audio.playSe('confirm');
+      resultLayer.classList.add('hidden');
+      resultLayer.innerHTML = '';
+      resolve();
+    });
+  });
 }
 
 async function animatePartyXpGain(snapshots) {
-  // 順番にXPバーをアニメーション
   for (const snap of snapshots) {
     const row = document.querySelector(`.party-row[data-hero-key="${snap.heroKey}"]`);
     if (!row) continue;
-
     for (const ev of snap.events) {
       if (ev.type === 'xp') {
-        await animateXpBar(row, ev.from, ev.to, ev.max, ev.level);
+        await animateXpBar(row, ev.from, ev.to, ev.max);
       } else if (ev.type === 'levelup') {
         await animateLevelUp(row, ev.newLevel);
-        // 次のXPイベントの最大値は新レベル基準なので、バーをリセット
         const fill = row.querySelector('.xp-bar__fill');
         const cur = row.querySelector('.xp-cur');
-        const maxEl = row.querySelector('.xp-max');
         fill.style.width = '0%';
         cur.textContent = '0';
       }
@@ -250,17 +345,17 @@ async function animatePartyXpGain(snapshots) {
   }
 }
 
-function animateXpBar(row, from, to, max, level) {
+function animateXpBar(row, from, to, max) {
   return new Promise(resolve => {
     const fill = row.querySelector('.xp-bar__fill');
     const cur = row.querySelector('.xp-cur');
     const maxEl = row.querySelector('.xp-max');
     maxEl.textContent = max;
-    const duration = Math.min(800, 200 + (to - from) * 30);
+    const duration = Math.min(600, 150 + (to - from) * 25);
     const start = performance.now();
     function step(now) {
       const t = Math.min(1, (now - start) / duration);
-      const eased = t * (2 - t); // easeOutQuad
+      const eased = t * (2 - t);
       const val = from + (to - from) * eased;
       fill.style.width = `${(val / max) * 100}%`;
       cur.textContent = Math.floor(val);
@@ -288,15 +383,45 @@ function animateLevelUp(row, newLevel) {
 }
 
 async function showDefeatScreen(result) {
+  return new Promise(resolve => {
+    let layer = $('resultLayer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'resultLayer';
+      layer.className = 'result-layer';
+      $('gameContainer').appendChild(layer);
+    }
+    layer.classList.remove('hidden');
+    layer.innerHTML = `
+      <div class="result-screen result-screen--defeat">
+        <div class="result__title result__title--defeat">DEFEATED</div>
+        <div class="result__sub">力尽きた…</div>
+        <div class="result__stats">
+          <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
+        </div>
+        <button class="title-screen__press result__btn" id="defeatRetry">ワールドマップへ</button>
+      </div>`;
+    $('defeatRetry').addEventListener('click', () => {
+      audio.playSe('confirm');
+      layer.classList.add('hidden');
+      layer.innerHTML = '';
+      resolve();
+    });
+  });
+}
+
+async function showWorldClear() {
+  await transition('black'); await sleep(500); await transition('unblack');
   const container = $('gameContainer');
   container.innerHTML = `
-    <div class="result-screen result-screen--defeat">
-      <div class="result__title result__title--defeat">DEFEATED</div>
-      <div class="result__sub">力尽きた…</div>
-      <div class="result__stats">
-        <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
+    <div class="chapter-complete">
+      <div class="chapter-complete__title">WORLD CLEAR</div>
+      <div class="chapter-complete__sub">第一章「戦国の地」攻略完了</div>
+      <div class="chapter-complete__text">
+        アッティラを討ち破り、戦国の地に平穏が戻った。<br>
+        だが、クリプトワールドの戦いはまだ続く——
       </div>
-      <button class="title-screen__press result__btn" onclick="location.reload()">リトライ</button>
+      <button class="title-screen__press chapter-complete__btn" onclick="location.reload()">最初から</button>
     </div>`;
 }
 
