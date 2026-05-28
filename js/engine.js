@@ -4,6 +4,7 @@
    ============================================================ */
 
 import { ASSETS, ENEMY_TYPES, STAGE_WAVES, TACTIC, LEVELUP_CHOICES, HEROES, MCS, EXTENSIONS, xpToNextLevel } from './constants.js';
+import { partyState } from './state.js';
 import { audio } from './audio.js';
 
 const PI2 = Math.PI * 2;
@@ -36,14 +37,11 @@ export class GameEngine {
     this.spawnTimer = 0;
     this.spawnQueue = [];
 
-    this.xp = 0;
-    this.level = 1;
     this.kills = 0;
     this.totalEnemies = 0;
     this.spawnedCount = 0;
     this.tactic = TACTIC.BALANCED;
     this.allyPhyBuff = 1.0;
-    this.pickupRangeBonus = 0;
 
     this.combo = 0;
     this.comboTimer = 0;
@@ -54,7 +52,6 @@ export class GameEngine {
     this.screenShakeY = 0;
 
     this.input = { dx: 0, dy: 0 };
-    this.onLevelUp = null;
     this.onRescue = null;
     this.onBoss = null;
     this.onVictory = null;
@@ -91,13 +88,10 @@ export class GameEngine {
     this.exit = stage.exit || null;
     this.stageTime = 0;
     this.ambientTimer = 0;
-    this.xp = 0;
-    this.level = 1;
     this.kills = 0;
     this.totalEnemies = 0;
     this.spawnedCount = 0;
     this.allyPhyBuff = 1.0;
-    this.pickupRangeBonus = 0;
     this.reachedExit = false;
 
     this.enemies = [];
@@ -135,14 +129,18 @@ export class GameEngine {
   _createUnit(def, x, y, isAlly) {
     // MCS式: 全ヒーロー共通の基礎値 + MCH原データから導出
     const mch = def.mchStats || { hp: 100, phy: 30, int: 30, agi: 50 };
-    const maxHp = Math.floor(MCS.HERO_HP_BASE + mch.hp * MCS.HERO_HP_PER_STAT);
+    // 永続レベルボーナス: レベル1あたり+8%
+    const persistentLv = partyState.getHeroLevel(def.id);
+    const lvMul = 1 + (persistentLv - 1) * 0.08;
+    const maxHp = Math.floor((MCS.HERO_HP_BASE + mch.hp * MCS.HERO_HP_PER_STAT) * lvMul);
     const speed = Math.floor(MCS.HERO_SPEED_BASE + mch.agi * MCS.HERO_SPEED_PER_AGI);
     return {
       id: def.id, name: def.name, imageId: def.imageId,
       x, y, radius: MCS.PLAYER_RADIUS,
       hp: maxHp, maxHp,
-      phy: mch.phy, int: mch.int, agi: mch.agi,
+      phy: Math.floor(mch.phy * lvMul), int: Math.floor(mch.int * lvMul), agi: mch.agi,
       moveSpeed: speed,
+      level: persistentLv,
       atkSpeed: def.atkSpeed || 1.0,
       atkRange: def.atkRange || 60,
       atkType: def.atkType, atkPattern: def.atkPattern,
@@ -208,7 +206,7 @@ export class GameEngine {
     }
     if (this.reachedExit && this.onVictory) {
       this.stop();
-      this.onVictory({ kills: this.kills, level: this.level, time: this.stageTime });
+      this.onVictory({ kills: this.kills, time: this.stageTime, maxCombo: this.maxCombo });
     }
   }
 
@@ -372,6 +370,8 @@ export class GameEngine {
     fh.recruited = true;
     const def = this.heroDefMap[fh.heroKey];
     if (def) {
+      // 永続パーティーに追加（初回邂逅時のみLv1で追加される）
+      partyState.addHero(fh.heroKey);
       const ally = this._createUnit(def, this.player.x + (Math.random() - 0.5) * 60, this.player.y + (Math.random() - 0.5) * 60, true);
       // MCS式: 各ヒーローの初期エクステンションを装備
       if (def.startingExtension) this.equipExtension(ally, def.startingExtension);
@@ -607,7 +607,6 @@ export class GameEngine {
       this.combo++;
       this.comboTimer = 2.0;
       if (this.combo > this.maxCombo) this.maxCombo = this.combo;
-      this._dropXp(enemy.x, enemy.y, enemy.xpValue);
       const burstCount = this.particles.length < 200 ? (enemy.isBoss ? 6 : 2) : 0;
       for (let i = 0; i < burstCount; i++) {
         this.particles.push({
@@ -621,23 +620,6 @@ export class GameEngine {
     }
   }
 
-  _dropXp(x, y, amount) {
-    if (this.pickups.length > 400) {
-      this.xp += amount;
-      return;
-    }
-    const count = Math.min(Math.ceil(amount / 3), 3);
-    const perOrb = amount / count;
-    for (let i = 0; i < count; i++) {
-      this.pickups.push({
-        x: x + (Math.random() - 0.5) * 20,
-        y: y + (Math.random() - 0.5) * 20,
-        type: 'xp', value: perOrb, radius: 4,
-        vx: (Math.random() - 0.5) * 80, vy: (Math.random() - 0.5) * 80,
-        timer: 0, magnetized: false,
-      });
-    }
-  }
 
   _updateEnemies(dt) {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -685,64 +667,7 @@ export class GameEngine {
   }
 
   _updatePickups(dt) {
-    const magnetDist = PICKUP_MAGNET_DIST + this.pickupRangeBonus;
-    for (let i = this.pickups.length - 1; i >= 0; i--) {
-      const pk = this.pickups[i];
-      pk.timer += dt;
-      if (pk.timer < 0.3) {
-        pk.x += pk.vx * dt * (1 - pk.timer / 0.3);
-        pk.y += pk.vy * dt * (1 - pk.timer / 0.3);
-        continue;
-      }
-      const dx = this.player.x - pk.x, dy = this.player.y - pk.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < magnetDist) {
-        const speed = PICKUP_MAGNET_SPEED * (1 - dist / magnetDist + 0.3);
-        pk.x += (dx / dist) * speed * dt;
-        pk.y += (dy / dist) * speed * dt;
-      }
-      if (dist < this.player.radius + pk.radius + 5) {
-        if (pk.type === 'xp') this._collectXp(pk.value);
-        this.pickups.splice(i, 1);
-        audio.playSe('select');
-      }
-    }
-  }
-
-  _collectXp(amount) {
-    this.xp += amount;
-    const needed = xpToNextLevel(this.level);
-    if (this.xp >= needed && this.onLevelUp) {
-      this.xp -= needed;
-      this.level++;
-      this.pause();
-      this.onLevelUp(this.level);
-    }
-  }
-
-  applyLevelUp(choice) {
-    const allUnits = [this.player, ...this.allies];
-    if (choice.stat === 'allyPhyBuff') {
-      this.allyPhyBuff += choice.mul;
-    } else if (choice.stat === 'pickupRange') {
-      this.pickupRangeBonus += PICKUP_MAGNET_DIST * choice.mul;
-    } else {
-      for (const u of allUnits) {
-        if (u[choice.stat] !== undefined) {
-          u[choice.stat] = Math.floor(u[choice.stat] * (1 + choice.mul));
-        }
-      }
-      if (choice.stat === 'maxHp') {
-        for (const u of allUnits) u.hp = Math.min(u.hp + 20, u.maxHp);
-      }
-      // agi強化時はmoveSpeedも再計算
-      if (choice.stat === 'agi') {
-        for (const u of allUnits) {
-          u.moveSpeed = Math.floor(MCS.HERO_SPEED_BASE + u.agi * MCS.HERO_SPEED_PER_AGI);
-        }
-      }
-    }
-    this.resume();
+    // ピックアップは現在使用していない（XPはステージ終了時にまとめて配布）
   }
 
   _updateParticles(dt) {
@@ -1163,17 +1088,11 @@ export class GameEngine {
     if (!this.hud) return;
     const p = this.player;
     const hpRatio = Math.max(0, p.hp / p.maxHp);
-    const xpNeeded = xpToNextLevel(this.level);
-    const xpRatio = Math.min(1, this.xp / xpNeeded);
-    const remaining = Math.max(0, this.stageDuration - this.stageTime);
-    const min = Math.floor(remaining / 60);
-    const sec = Math.floor(remaining % 60);
 
     this.hud.hp.style.width = `${hpRatio * 100}%`;
     this.hud.hp.style.background = hpRatio > 0.3 ? 'var(--hp-bar)' : 'var(--hp-bar-low)';
     this.hud.hpText.textContent = `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`;
-    this.hud.xpBar.style.width = `${xpRatio * 100}%`;
-    this.hud.level.textContent = `Lv.${this.level}`;
+    if (this.hud.level) this.hud.level.textContent = `Lv.${p.level || 1}`;
     const elapsedMin = Math.floor(this.stageTime / 60);
     const elapsedSec = Math.floor(this.stageTime % 60);
     this.hud.timer.textContent = `${elapsedMin}:${elapsedSec.toString().padStart(2, '0')}`;
@@ -1185,7 +1104,7 @@ export class GameEngine {
   }
 
   getResults() {
-    return { kills: this.kills, level: this.level, time: this.stageTime, maxCombo: this.maxCombo };
+    return { kills: this.kills, time: this.stageTime, maxCombo: this.maxCombo };
   }
 
   equipWeapon(atkType, atkPattern, phyBonus = 0) {
