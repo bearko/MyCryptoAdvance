@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { xpToNextLevel } from './constants.js';
+import { calcProduction, ATTR_LABEL } from './factory-attrs.js';
 
 class PartyState {
   constructor() {
@@ -33,8 +34,12 @@ class PartyState {
     this.facilities = { dojo: 0, market: 0, farm: 0, smith: 0 };
     // 最後のターンイベント
     this.lastEvent = null;
-    // 到着待ち（伝令キュー）
+    // 到着待ち（伝令キュー: 手動戦闘の到着）
     this.arrivalQueue = []; // [{ squadId, terrId }]
+    // 自動戦闘完了キュー
+    this.autoBattleQueue = []; // [{ squadId, terrId }]
+    // 内政自動処理キュー
+    this.weeklyAffairsDue = false;
   }
 
   addHero(heroKey) {
@@ -152,11 +157,13 @@ class PartyState {
     if (target) target.heroes.push(heroKey);
   }
 
-  dispatchSquad(squadId, destinationTerrId, days) {
+  dispatchSquad(squadId, destinationTerrId, days, battleMode = 'manual') {
     const s = this.getSquad(squadId);
     if (!s || s.status === 'traveling' || s.heroes.length === 0) return false;
     s.destination = destinationTerrId;
     s.daysRemaining = days;
+    s.totalTravelDays = days; // 進捗計算用
+    s.battleMode = battleMode; // 'auto' or 'manual'
     s.status = 'traveling';
     return true;
   }
@@ -164,23 +171,68 @@ class PartyState {
   // 1日進める
   tickDay() {
     this.day++;
-    // 旅行中編成を進める
+    // 旅行中・戦闘中の編成を進める
     for (const s of this.squads) {
-      if (s.status !== 'traveling') continue;
-      s.daysRemaining--;
-      if (s.daysRemaining <= 0) {
-        s.location = s.destination;
-        s.destination = null;
-        s.daysRemaining = 0;
-        s.status = 'arrived';
-        this.arrivalQueue.push({ squadId: s.id, terrId: s.location });
+      if (s.status === 'traveling') {
+        s.daysRemaining--;
+        if (s.daysRemaining <= 0) {
+          s.location = s.destination;
+          s.destination = null;
+          s.daysRemaining = 0;
+          s.totalTravelDays = 0;
+          // 既に制圧済みなら戦闘なしで駐留
+          if (this.isTerritoryConquered(s.location)) {
+            s.status = 'idle';
+          } else if (s.battleMode === 'auto') {
+            // 自動戦闘モード: 戦闘期間に入る
+            s.status = 'fighting';
+            s.fightDaysRemaining = 3; // 3日かかる
+            s.fightTotalDays = 3;
+          } else {
+            // 手動戦闘モード: 伝令キューに登録（プレイヤー指示待ち）
+            s.status = 'arrived';
+            this.arrivalQueue.push({ squadId: s.id, terrId: s.location });
+          }
+        }
+      } else if (s.status === 'fighting') {
+        s.fightDaysRemaining--;
+        if (s.fightDaysRemaining <= 0) {
+          // 自動戦闘解決待ちキューに登録（重複防止のためstatusを'resolving'に）
+          s.status = 'resolving';
+          s.fightDaysRemaining = 0;
+          this.autoBattleQueue.push({ squadId: s.id, terrId: s.location });
+        }
       }
+    }
+    // 週開始判定 (day=1,8,15... = week start, 内政適用)
+    if ((this.day - 1) % 7 === 0 && this.day > 1) {
+      this.weeklyAffairsDue = true;
     }
   }
 
-  // 7日進める = 1週進める
+  isWeekStart() {
+    return this.weeklyAffairsDue;
+  }
+
+  consumeWeekStart() {
+    this.weeklyAffairsDue = false;
+  }
+
+  // 7日進める = 1週進める (手動用)
   advanceWeek() {
     for (let i = 0; i < 7; i++) this.tickDay();
+  }
+
+  // 政務割当から自動生産量を計算
+  calcAutoProductions() {
+    const prod = { gold: 0, food: 0, materials: 0, soldiers: 0 };
+    for (const [heroKey, task] of Object.entries(this.taskAssignments)) {
+      if (!this.hasHero(heroKey)) continue;
+      const amount = calcProduction(heroKey, task);
+      const resource = ATTR_LABEL[task].resource;
+      prod[resource] += amount;
+    }
+    return prod;
   }
 
   // 派遣後、編成が制圧成功した場合の状態更新
