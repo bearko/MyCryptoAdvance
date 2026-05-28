@@ -90,7 +90,7 @@ async function runStage1() {
   partyState.conquerTerritory('home_camp');
   if (result.victory) {
     await dialogue.show(DIALOGUES.reach_exit);
-    const rewards = partyState.awardStageRewards(result.kills, result.time, {}, result.maxCombo);
+    const rewards = partyState.awardStageRewards(result.kills, result.time, {}, result.maxCombo, result.bonusXp || 0);
     await showStageClearResult({ ...result, terr: { name: '関ヶ原（脱出成功）' } }, rewards);
   } else {
     await showDefeatScreen(result);
@@ -119,7 +119,7 @@ async function attackTerritory(terr) {
   // ステージ設定: TERRITORY_STAGESにあれば使用、なければ sekigahara_field
   const stageDef = TERRITORY_STAGES[terr.id];
   if (stageDef) {
-    STAGE_WAVES[terr.id] = { ...stageDef, title: terr.name, bgm: 'pve.mp3' };
+    STAGE_WAVES[terr.id] = { ...stageDef, title: terr.name, bgm: 'pve.mp3', difficulty: terr.difficulty };
   }
   await transition('unblack');
 
@@ -136,7 +136,7 @@ async function attackTerritory(terr) {
     if (terr.recruit && !partyState.hasHero(terr.recruit)) {
       partyState.addHero(terr.recruit);
     }
-    const rewards = partyState.awardStageRewards(result.kills, result.time, terr.reward || {}, result.maxCombo);
+    const rewards = partyState.awardStageRewards(result.kills, result.time, terr.reward || {}, result.maxCombo, result.bonusXp || 0);
     if (terr.recruit) {
       const def = HEROES[terr.recruit];
       await dialogue.show([
@@ -461,6 +461,11 @@ function animateLevelUp(row, newLevel, durationMs, ctx) {
 }
 
 async function showDefeatScreen(result) {
+  // 敗北時にも到達フェーズに応じた控えめなXPを配布（リスク回避を促す）
+  let rewards = null;
+  if (result.bonusXp > 0) {
+    rewards = partyState.awardStageRewards(result.kills, result.time, {}, result.maxCombo || 0, Math.floor((result.bonusXp || 0) * 0.4));
+  }
   return new Promise(resolve => {
     let layer = $('resultLayer');
     if (!layer) {
@@ -470,12 +475,24 @@ async function showDefeatScreen(result) {
       $('gameContainer').appendChild(layer);
     }
     layer.classList.remove('hidden');
+    const phase = result.reachedPhase || 1;
+    const phaseMsg = phase >= 4 ? '善戦したが及ばず…' : phase >= 2 ? '敵が予想以上に強かった…' : '装備と仲間が足りない…';
     layer.innerHTML = `
       <div class="result-screen result-screen--defeat">
         <div class="result__title result__title--defeat">DEFEATED</div>
-        <div class="result__sub">力尽きた…</div>
+        <div class="result__sub">${phaseMsg}</div>
         <div class="result__stats">
           <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
+          <div class="stat-item"><span class="stat-label">到達フェーズ</span><span class="stat-value">${phase}</span></div>
+        </div>
+        ${rewards ? `<div class="result__rewards">
+          <div class="reward-row"><span class="reward-label">獲得経験値（4割）</span><span class="reward-value">+${rewards.xpAward}</span></div>
+        </div>` : ''}
+        <div class="defeat-hint">
+          🏯 本拠地で内政・道場で家臣を強化<br>
+          ⚒ 武具を購入して装備を整える<br>
+          🤝 簡単な領地で仲間を集める<br>
+          を試してから再挑戦しましょう
         </div>
         <button class="title-screen__press result__btn" id="defeatRetry">ワールドマップへ</button>
       </div>`;

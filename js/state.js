@@ -80,10 +80,14 @@ class PartyState {
   }
 
   // ステージクリア時の報酬計算 + 配布
-  awardStageRewards(kills, timeSec, territoryBonus = {}, maxCombo = 0) {
+  // bonusXp: 敵tier・フェーズベースで蓄積された撃破XP合計
+  awardStageRewards(kills, timeSec, territoryBonus = {}, maxCombo = 0, bonusXp = 0) {
     const battleRank = this.evaluateBattle(kills, maxCombo, timeSec);
     const mul = battleRank.mul;
-    const xpAward = Math.floor((80 + kills * 1.5) * mul);
+    // 基礎XP は控えめに（雑魚ばかり倒しても伸びない）。bonusXpが質的成長。
+    // bonusXpは敵Tier×フェーズ倍率の累積。0.2倍に抑え過剰レベルアップを防止。
+    const baseXp = Math.floor((30 + kills * 0.4) * mul);
+    const xpAward = baseXp + Math.floor(bonusXp * mul * 0.2);
     const goldAward = Math.floor((40 + kills * 0.6) * mul) + (territoryBonus.gold || 0);
     const materialAward = (territoryBonus.materials || 0) + Math.floor(kills * 0.1 * mul);
     const foodAward = (territoryBonus.food || 0);
