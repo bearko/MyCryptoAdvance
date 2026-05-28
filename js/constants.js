@@ -54,7 +54,7 @@ export const HEROES = {
 
   mitsunari:  { id: 'mitsunari', name: '石田三成', imageId: 2012, faction: FACTION.HERO,
     mchStats: { hp: 246, phy: 79, int: 116, agi: 63 },
-    atkSpeed: 1.2, atkRange: 110, atkType: 'magic', atkPattern: 'bolt',
+    atkSpeed: 1.2, atkRange: 70, atkType: 'magic', atkPattern: 'bolt',
     startingExtension: 'sensu' },
 
   kaihime:    { id: 'kaihime', name: '甲斐姫', imageId: 1002, faction: FACTION.HERO,
@@ -106,7 +106,7 @@ export const EXTENSIONS = {
   rapier:        { id: 1028, name: 'レイピア',         archetype: 'melee',  baseDmg: 12, baseCd: 450,  range: 75,  phyBonus: 6, agiBonus: 12 },
   yumi:          { id: 1013, name: 'ユミ',             archetype: 'ranged', baseDmg: 18, baseCd: 900,  range: 320, phyBonus: 8, agiBonus: 4 },
   cross_spear:   { id: 1014, name: 'クロススピア',     archetype: 'melee',  baseDmg: 22, baseCd: 750,  range: 100, phyBonus: 14 },
-  sensu:         { id: 1032, name: 'センス',           archetype: 'magic',  baseDmg: 24, baseCd: 1100, range: 240, intBonus: 14 },
+  sensu:         { id: 1032, name: 'センス',           archetype: 'magic',  baseDmg: 24, baseCd: 1100, range: 90,  intBonus: 14 },
   kabuto:        { id: 1018, name: 'カブト',           archetype: 'armor',  baseDmg: 0,  baseCd: 0,    range: 0,   hpBonus: 30 },
   boots:         { id: 1031, name: 'ブーツ',           archetype: 'armor',  baseDmg: 0,  baseCd: 0,    range: 0,   agiBonus: 15 },
 };
