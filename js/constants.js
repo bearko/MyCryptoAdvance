@@ -175,6 +175,150 @@ export const STAGE_WAVES = {
   },
 };
 
+// ワールド1: 関ヶ原周辺の領地マップ
+// 各領地はステージ。本拠地から経路でつながり、隣接領地のみ攻略可能
+export const WORLD_MAP = {
+  id: 'world1',
+  name: '第一章 戦国の地',
+  territories: [
+    {
+      id: 'home_camp', name: '西軍本陣', type: 'home', x: 50, y: 78,
+      desc: '石田三成の本拠地。内政の中心。',
+      icon: '🏯',
+    },
+    {
+      id: 'nakasendo', name: '中山道', type: 'recruit', x: 28, y: 62, difficulty: 1,
+      desc: '街道の宿場町。傷ついた医師が助けを求めている。',
+      icon: '🛤',
+      recruit: 'nightingale',
+      reward: { gold: 30, food: 50 },
+    },
+    {
+      id: 'kiso', name: '木曽の森', type: 'battle', x: 72, y: 62, difficulty: 1,
+      desc: '材木が豊富な森。盗賊が拠点を構える。',
+      icon: '🌲',
+      reward: { materials: 80, gold: 20 },
+    },
+    {
+      id: 'mino', name: '美濃', type: 'battle', x: 22, y: 42, difficulty: 2,
+      desc: '裕福な領地。攻略すれば金が手に入る。',
+      icon: '💴',
+      reward: { gold: 200, food: 30 },
+    },
+    {
+      id: 'shinano', name: '信濃', type: 'recruit', x: 50, y: 50, difficulty: 2,
+      desc: '山地の領主と謀略家が潜む。',
+      icon: '⛰',
+      recruit: 'sun_tzu',
+      reward: { gold: 80, materials: 40 },
+    },
+    {
+      id: 'owari', name: '尾張', type: 'recruit', x: 78, y: 42, difficulty: 3,
+      desc: '織田家の旧領。強力な英雄が眠っている。',
+      icon: '🔥',
+      recruit: 'nobunaga',
+      reward: { gold: 150, materials: 60 },
+    },
+    {
+      id: 'omi', name: '近江', type: 'battle', x: 35, y: 24, difficulty: 3,
+      desc: '京への要衝。アッティラ本陣への道。',
+      icon: '🏔',
+      reward: { gold: 120, materials: 80, food: 40 },
+    },
+    {
+      id: 'attila_castle', name: 'アッティラの本陣', type: 'boss', x: 50, y: 8, difficulty: 5,
+      desc: '侵略者アッティラの本拠地。ワールド1の決戦。',
+      icon: '👑',
+      isFinalBoss: true,
+    },
+  ],
+  // 領地接続グラフ
+  connections: [
+    ['home_camp', 'nakasendo'],
+    ['home_camp', 'kiso'],
+    ['nakasendo', 'mino'],
+    ['nakasendo', 'shinano'],
+    ['kiso', 'shinano'],
+    ['kiso', 'owari'],
+    ['mino', 'omi'],
+    ['shinano', 'omi'],
+    ['owari', 'omi'],
+    ['omi', 'attila_castle'],
+  ],
+};
+
+// 各領地のステージ設定（戦闘ノード用）
+export const TERRITORY_STAGES = {
+  nakasendo: {
+    fieldSize: 2400, playerStart: { x: 1200, y: 2200 }, exit: { x: 1200, y: 200, radius: 90 },
+    fieldHeroes: [], // 救出はクリア後ダイアログで実施
+    heroBattleEnemies: ['creeper_s', 'creeper_t', 'elk_s'],
+    ambientSpawn: { enemies: ['creeper_s', 'creeper_t', 'elk_s', 'heart_s'], interval: 0.18, maxAround: 70 },
+    exitGuard: { enemies: ['creeper_t', 'elk_s', 'heart_s', 'melissa_s'], eliteEnemies: ['creeper_v'], guardRadius: 380, maxGuards: 30, spawnInterval: 0.12, eliteCount: 1, eliteSpawnInterval: 2.0 },
+  },
+  kiso: {
+    fieldSize: 2400, playerStart: { x: 1200, y: 2200 }, exit: { x: 1200, y: 200, radius: 90 },
+    fieldHeroes: [],
+    heroBattleEnemies: ['bandit_s', 'creeper_t', 'elk_t'],
+    ambientSpawn: { enemies: ['bandit_s', 'creeper_t', 'elk_t', 'heart_t'], interval: 0.15, maxAround: 75 },
+    exitGuard: { enemies: ['bandit_s', 'elk_t', 'heart_t', 'melissa_t'], eliteEnemies: ['bandit_t'], guardRadius: 400, maxGuards: 35, spawnInterval: 0.10, eliteCount: 2, eliteSpawnInterval: 1.8 },
+  },
+  mino: {
+    fieldSize: 2700, playerStart: { x: 1350, y: 2500 }, exit: { x: 1350, y: 200, radius: 90 },
+    fieldHeroes: [],
+    heroBattleEnemies: ['creeper_t', 'elk_g', 'heart_t', 'melissa_t'],
+    ambientSpawn: { enemies: ['creeper_g', 'elk_t', 'melissa_t', 'bandit_s'], interval: 0.12, maxAround: 80 },
+    exitGuard: { enemies: ['bandit_t', 'melissa_g', 'heart_g', 'elk_g'], eliteEnemies: ['bandit_f', 'creeper_f'], guardRadius: 420, maxGuards: 45, spawnInterval: 0.09, eliteCount: 2, eliteSpawnInterval: 1.6 },
+  },
+  shinano: {
+    fieldSize: 2700, playerStart: { x: 1350, y: 2500 }, exit: { x: 1350, y: 200, radius: 90 },
+    fieldHeroes: [],
+    heroBattleEnemies: ['creeper_g', 'elk_g', 'heart_g', 'bandit_s'],
+    ambientSpawn: { enemies: ['creeper_g', 'melissa_t', 'bandit_s', 'elk_g'], interval: 0.11, maxAround: 80 },
+    exitGuard: { enemies: ['bandit_t', 'melissa_g', 'creeper_v', 'elk_g'], eliteEnemies: ['melissa_f', 'creeper_f'], guardRadius: 430, maxGuards: 50, spawnInterval: 0.08, eliteCount: 2, eliteSpawnInterval: 1.5 },
+  },
+  owari: {
+    fieldSize: 3000, playerStart: { x: 1500, y: 2700 }, exit: { x: 1500, y: 200, radius: 90 },
+    fieldHeroes: [],
+    heroBattleEnemies: ['creeper_v', 'bandit_t', 'elk_g', 'melissa_g'],
+    ambientSpawn: { enemies: ['creeper_v', 'bandit_t', 'melissa_g', 'elk_g'], interval: 0.10, maxAround: 85 },
+    exitGuard: { enemies: ['bandit_t', 'melissa_g', 'creeper_v', 'elk_g', 'heart_g'], eliteEnemies: ['bandit_f', 'melissa_f', 'elk_f'], guardRadius: 460, maxGuards: 60, spawnInterval: 0.07, eliteCount: 3, eliteSpawnInterval: 1.4 },
+  },
+  omi: {
+    fieldSize: 3000, playerStart: { x: 1500, y: 2700 }, exit: { x: 1500, y: 200, radius: 90 },
+    fieldHeroes: [],
+    heroBattleEnemies: ['bandit_t', 'creeper_v', 'melissa_g', 'elk_g'],
+    ambientSpawn: { enemies: ['bandit_t', 'creeper_v', 'melissa_g', 'elk_g', 'bagel_v'], interval: 0.09, maxAround: 90 },
+    exitGuard: { enemies: ['bandit_t', 'melissa_g', 'creeper_v', 'bagel_v', 'elk_g'], eliteEnemies: ['bandit_f', 'melissa_f', 'elk_f', 'creeper_f'], guardRadius: 480, maxGuards: 65, spawnInterval: 0.06, eliteCount: 3, eliteSpawnInterval: 1.3 },
+  },
+  attila_castle: {
+    fieldSize: 3000, playerStart: { x: 1500, y: 2700 }, exit: { x: 1500, y: 200, radius: 90 },
+    fieldHeroes: [],
+    heroBattleEnemies: ['bandit_t', 'creeper_v', 'bagel_v', 'melissa_g'],
+    ambientSpawn: { enemies: ['bandit_t', 'creeper_v', 'bagel_v', 'melissa_g', 'elk_g'], interval: 0.08, maxAround: 100 },
+    exitGuard: { enemies: ['bandit_t', 'bagel_v', 'creeper_v', 'melissa_g', 'elk_g'], eliteEnemies: ['bandit_f', 'melissa_f', 'elk_f', 'creeper_f'], guardRadius: 500, maxGuards: 80, spawnInterval: 0.05, eliteCount: 4, eliteSpawnInterval: 1.0 },
+    finalBoss: 'attila',
+  },
+};
+
+// リクルートプール: ゴールドで雇える追加ヒーロー
+export const RECRUIT_POOL = [
+  { heroKey: 'douran',     cost: 300 },
+  { heroKey: 'etheremon',  cost: 400 },
+];
+
+// エクステンションショップ
+export const SHOP_EXTENSIONS = [
+  { extKey: 'novice_blade',  cost: 100 },
+  { extKey: 'novice_katana', cost: 150 },
+  { extKey: 'rapier',        cost: 180 },
+  { extKey: 'yumi',          cost: 220 },
+  { extKey: 'cross_spear',   cost: 260 },
+  { extKey: 'sensu',         cost: 280 },
+  { extKey: 'kabuto',        cost: 200 },
+  { extKey: 'boots',         cost: 180 },
+];
+
 // MCS式: XP_TO_NEXT_INITIAL × XP_TO_NEXT_GROWTH^(level-1)
 export function xpToNextLevel(level) {
   return Math.ceil(MCS.XP_TO_NEXT_INITIAL * Math.pow(MCS.XP_TO_NEXT_GROWTH, Math.max(0, level - 1)));
