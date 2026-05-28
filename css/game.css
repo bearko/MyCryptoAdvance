@@ -227,6 +227,13 @@
 }
 
 .result__btn { margin-top: 0.6rem; }
+.result__btn--skipping {
+  opacity: 0.7;
+  background: rgba(196,163,90,0.3);
+  color: var(--accent);
+  animation: none;
+}
+.result-layer { cursor: pointer; }
 
 /* ---------- Dialogue ---------- */
 .dialogue-layer {
