@@ -2,7 +2,7 @@
    main.js — game flow: prologue → stage1 → world map loop
    ============================================================ */
 
-import { ASSETS, HEROES, TACTIC, DIALOGUES, SWARM_ENEMY_IDS, WORLD_MAP, TERRITORY_STAGES, STAGE_WAVES } from './constants.js';
+import { ASSETS, HEROES, TACTIC, DIALOGUES, SWARM_ENEMY_IDS, TERRITORY_STAGES, STAGE_WAVES } from './constants.js';
 import { partyState } from './state.js';
 import { DialogueSystem } from './dialogue.js';
 import { GameEngine } from './engine.js';
@@ -86,15 +86,14 @@ async function runPrologue() {
 
 async function runStage1() {
   const result = await runBattleStage({ stageKey: 'sekigahara_field', useDeploy: false });
+  // 勝敗どちらでも本拠地を解放し、ワールドマップに移行（敗北はやり直し可能）
+  partyState.conquerTerritory('home_camp');
   if (result.victory) {
     await dialogue.show(DIALOGUES.reach_exit);
-    // 本拠地解放
-    partyState.conquerTerritory('home_camp');
-    const rewards = partyState.awardStageRewards(result.kills, result.time);
+    const rewards = partyState.awardStageRewards(result.kills, result.time, {}, result.maxCombo);
     await showStageClearResult({ ...result, terr: { name: '関ヶ原（脱出成功）' } }, rewards);
   } else {
     await showDefeatScreen(result);
-    // 敗北時もとりあえずワールドへ
   }
 }
 
@@ -137,7 +136,7 @@ async function attackTerritory(terr) {
     if (terr.recruit && !partyState.hasHero(terr.recruit)) {
       partyState.addHero(terr.recruit);
     }
-    const rewards = partyState.awardStageRewards(result.kills, result.time, terr.reward || {});
+    const rewards = partyState.awardStageRewards(result.kills, result.time, terr.reward || {}, result.maxCombo);
     if (terr.recruit) {
       const def = HEROES[terr.recruit];
       await dialogue.show([
@@ -247,6 +246,7 @@ async function runBattleStage({ stageKey, useDeploy }) {
   $('battleHud').classList.add('hidden');
   $('gameCanvas').classList.add('hidden');
   controls.destroy();
+  if (engine.destroy) engine.destroy();
   $('sceneLayer').classList.remove('hidden');
 
   return result;
@@ -271,6 +271,11 @@ async function showStageClearResult(result, rewards) {
       <div class="result__title">STAGE CLEAR</div>
       <div class="result__sub">${result.terr ? result.terr.name : ''}</div>
 
+      <div class="result__rank">
+        <span class="rank-label">戦評価</span>
+        <span class="rank-value rank-${(rewards.battleRank?.rank || 'D').replace('+', 'p')}">${rewards.battleRank?.rank || 'D'}</span>
+        <span class="rank-mul">×${(rewards.battleRank?.mul || 1).toFixed(2)} 報酬</span>
+      </div>
       <div class="result__stats">
         <div class="stat-item"><span class="stat-label">撃破数</span><span class="stat-value">${result.kills}</span></div>
         <div class="stat-item"><span class="stat-label">最大コンボ</span><span class="stat-value">${result.maxCombo || 0}</span></div>

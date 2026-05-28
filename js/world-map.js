@@ -17,8 +17,10 @@ export class WorldMap {
   show() {
     return new Promise(resolve => {
       this.resolve = resolve;
-      this._render();
+      // hiddenを先に解除しないと getBoundingClientRect() が 0 を返す
       this.layer.classList.remove('hidden');
+      // 次フレームでレンダー（レイアウト確定後）
+      requestAnimationFrame(() => this._render());
     });
   }
 

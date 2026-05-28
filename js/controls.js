@@ -39,8 +39,10 @@ export class Controls {
   }
 
   _bindKeyboard() {
-    document.addEventListener('keydown', e => { this.keys[e.key.toLowerCase()] = true; });
-    document.addEventListener('keyup', e => { this.keys[e.key.toLowerCase()] = false; });
+    this._onKeyDown = e => { this.keys[e.key.toLowerCase()] = true; };
+    this._onKeyUp   = e => { this.keys[e.key.toLowerCase()] = false; };
+    document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('keyup', this._onKeyUp);
   }
 
   _bindTouch() {
@@ -116,5 +118,7 @@ export class Controls {
 
   destroy() {
     this.joystickEl.remove();
+    if (this._onKeyDown) document.removeEventListener('keydown', this._onKeyDown);
+    if (this._onKeyUp)   document.removeEventListener('keyup', this._onKeyUp);
   }
 }

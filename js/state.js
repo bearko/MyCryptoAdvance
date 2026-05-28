@@ -34,6 +34,10 @@ class PartyState {
   addHero(heroKey) {
     if (!this.members.find(m => m.heroKey === heroKey)) {
       this.members.push({ heroKey, level: 1, xp: 0 });
+      // 新規仲間は自動で出陣編成に組み込む（5枠まで、playerは除外）
+      if (heroKey !== 'player' && this.deploy.length < 5 && !this.deploy.includes(heroKey)) {
+        this.deploy.push(heroKey);
+      }
     }
   }
 
@@ -55,11 +59,33 @@ class PartyState {
     return this.members.find(m => m.heroKey === heroKey);
   }
 
+  // 戦評価: kills/combo/timeに基づくランク
+  evaluateBattle(kills, maxCombo, timeSec) {
+    let score = 0;
+    if (kills >= 200) score += 3; else if (kills >= 100) score += 2; else if (kills >= 50) score += 1;
+    if (maxCombo >= 80) score += 3; else if (maxCombo >= 40) score += 2; else if (maxCombo >= 20) score += 1;
+    if (timeSec <= 180) score += 3; else if (timeSec <= 300) score += 2; else if (timeSec <= 480) score += 1;
+    const ranks = [
+      { rank: 'D', mul: 1.0 },
+      { rank: 'C', mul: 1.1 },
+      { rank: 'B', mul: 1.25 },
+      { rank: 'A', mul: 1.4 },
+      { rank: 'S', mul: 1.6 },
+      { rank: 'S+', mul: 1.8 },
+      { rank: 'SS', mul: 2.0 },
+      { rank: 'SSS', mul: 2.5 },
+    ];
+    const idx = Math.min(score, ranks.length - 1);
+    return ranks[idx];
+  }
+
   // ステージクリア時の報酬計算 + 配布
-  awardStageRewards(kills, timeSec, territoryBonus = {}) {
-    const xpAward = Math.floor(80 + kills * 1.5);
-    const goldAward = Math.floor(40 + kills * 0.6) + (territoryBonus.gold || 0);
-    const materialAward = (territoryBonus.materials || 0) + Math.floor(kills * 0.1);
+  awardStageRewards(kills, timeSec, territoryBonus = {}, maxCombo = 0) {
+    const battleRank = this.evaluateBattle(kills, maxCombo, timeSec);
+    const mul = battleRank.mul;
+    const xpAward = Math.floor((80 + kills * 1.5) * mul);
+    const goldAward = Math.floor((40 + kills * 0.6) * mul) + (territoryBonus.gold || 0);
+    const materialAward = (territoryBonus.materials || 0) + Math.floor(kills * 0.1 * mul);
     const foodAward = (territoryBonus.food || 0);
 
     this.resources.gold += goldAward;
@@ -108,6 +134,7 @@ class PartyState {
       xpAward, goldAward, materialAward, foodAward,
       snapshots,
       resources: { ...this.resources },
+      battleRank,
     };
   }
 
