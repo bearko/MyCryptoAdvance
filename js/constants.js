@@ -53,6 +53,11 @@ export const HEROES = {
     baseStats: { maxHp: 260, phy: 25, int: 65, agi: 40, atkSpeed: 0.7, atkRange: 140 },
     atkType: 'magic', atkPattern: 'field', growthRate: { maxHp: 20, phy: 2, int: 7, agi: 3 } },
 
+  // 敵将（侵略者）
+  attila:     { id: 'attila', name: 'アッティラ', imageId: 3047, faction: FACTION.INVADER,
+    baseStats: { maxHp: 1800, phy: 65, int: 40, agi: 50, atkSpeed: 1.5, atkRange: 80 },
+    atkType: 'melee', atkPattern: 'wave', growthRate: { maxHp: 50, phy: 8, int: 4, agi: 4 } },
+
   // Citizens
   etheremon:  { id: 'etheremon', name: 'ETHEREMON-RED', imageId: 3001, faction: FACTION.CITIZEN,
     baseStats: { maxHp: 150, phy: 20, int: 30, agi: 40, atkSpeed: 1.0, atkRange: 70 },
@@ -92,31 +97,30 @@ export const ENEMY_TYPES = {
 
 export const STAGE_WAVES = {
   sekigahara_field: {
-    duration: 300,
     bgm: 'pve.mp3',
-    fieldSize: 2000,
-    laneWidth: 280,
-    totalEnemies: 9500,
-    waves: [
-      { time: 0,   enemies: ['creeper_s'], count: 300, interval: 0.012, spawnDir: [-Math.PI/2, 0.3] },
-      { time: 5,   enemies: ['creeper_s', 'creeper_s'], count: 350, interval: 0.010, spawnDir: [-Math.PI/2, 0.3] },
-      { time: 12,  enemies: ['creeper_s', 'creeper_t'], count: 400, interval: 0.008, spawnDir: [-Math.PI/2, 0.4] },
-      { time: 22,  enemies: ['elk_s', 'creeper_s', 'creeper_s'], count: 450, interval: 0.007, spawnDir: [-Math.PI/2, 0.4] },
-      { time: 34,  enemies: ['creeper_t', 'elk_s', 'heart_s'], count: 500, interval: 0.006, spawnDir: [-Math.PI/2, 0.5] },
-      { time: 50,  enemies: ['melissa_s', 'creeper_t', 'elk_s', 'creeper_s'], count: 550, interval: 0.006, spawnDir: [-Math.PI/2, 0.6] },
-      { time: 65,  event: 'rescue', heroKey: 'kaihime' },
-      { time: 68,  enemies: ['creeper_g', 'elk_t', 'melissa_s', 'heart_s'], count: 600, interval: 0.006, spawnDir: [-Math.PI/2, 0.7] },
-      { time: 88,  enemies: ['heart_t', 'melissa_t', 'elk_g', 'creeper_t'], count: 600, interval: 0.005, spawnDir: [-Math.PI/2, 0.8] },
-      { time: 108, enemies: ['melissa_t', 'elk_t', 'bandit_s', 'heart_t'], count: 650, interval: 0.005, spawnDir: [-Math.PI/2, 1.0] },
-      { time: 125, event: 'rescue', heroKey: 'ranmaru' },
-      { time: 128, enemies: ['creeper_v', 'bandit_s', 'melissa_g', 'elk_g'], count: 650, interval: 0.005, spawnDir: [-Math.PI/2, 1.2] },
-      { time: 150, enemies: ['bandit_t', 'elk_g', 'heart_g', 'melissa_g', 'bagel_s'], count: 700, interval: 0.005 },
-      { time: 175, enemies: ['bandit_t', 'creeper_v', 'melissa_g', 'elk_g'], count: 700, interval: 0.004 },
-      { time: 195, event: 'rescue', heroKey: 'yukimura' },
-      { time: 198, enemies: ['creeper_f', 'melissa_f', 'bandit_t', 'elk_g'], count: 600, interval: 0.006 },
-      { time: 225, enemies: ['elk_f', 'bandit_f', 'melissa_f', 'bagel_v', 'creeper_v'], count: 500, interval: 0.008 },
-      { time: 260, event: 'boss', bossType: 'bandit_f', bossScale: 2.5, bossHpMul: 8, bossDmgMul: 2 },
+    fieldSize: 3000,
+    // プレイヤーは戦場の南端中央でスタート
+    playerStart: { x: 1500, y: 2700 },
+    // 敵将アッティラの位置（北端の本陣）
+    boss: { heroKey: 'attila', x: 1500, y: 300 },
+    // フィールド上に既に戦っているヒーロー達
+    fieldHeroes: [
+      { heroKey: 'mitsunari', x: 1500, y: 2000, encounterRange: 130 },
+      { heroKey: 'kaihime',   x:  700, y: 1600, encounterRange: 130 },
+      { heroKey: 'ranmaru',   x: 2300, y: 1600, encounterRange: 130 },
+      { heroKey: 'yukimura',  x: 1500, y: 1100, encounterRange: 130 },
     ],
+    // 各拠点周辺に常時湧く敵の設定（ヒーローと交戦中）
+    heroBattleEnemies: ['creeper_s', 'creeper_t', 'elk_s', 'heart_s', 'melissa_s'],
+    // プレイヤー周辺に湧く敵（ランダムスポーン）
+    ambientSpawn: {
+      enemies: ['creeper_s', 'creeper_t', 'elk_s', 'heart_s', 'melissa_s', 'creeper_g', 'bandit_s'],
+      interval: 0.15,
+      maxAround: 80,
+    },
+    // 敵将本陣の精鋭エネミー
+    bossGuards: ['bandit_t', 'creeper_v', 'melissa_g', 'elk_g', 'bagel_s'],
+    bossGuardInterval: 0.2,
     xpTable: [0, 30, 80, 150, 250, 400, 600, 850, 1200, 1600, 2100, 2700, 3500],
   },
 };
@@ -148,32 +152,61 @@ export const DIALOGUES = {
     { speaker: '', text: '！？' },
     { speaker: '', text: '何だあれは・・・！\nこっちに向かってくる！' },
   ],
-  scene3_mitsunari: [
-    { speaker: '？？？', text: '危ない！　伏せろ！' },
-    { speaker: '石田三成', text: '・・・間に合ったか。\n無事のようだな。', portrait: 'mitsunari' },
-    { speaker: '石田三成', text: 'ここはクリプトワールド——\n現実とは異なる、もう一つの世界だ。', portrait: 'mitsunari' },
-    { speaker: '', text: 'クリプトワールド・・・？' },
-    { speaker: '石田三成', text: 'あの化物どもは「侵略者」の先兵。\nこの世界を喰らい尽くそうとしている。', portrait: 'mitsunari' },
-    { speaker: '石田三成', text: 'お主にも戦う力があるはずだ。\n我と共に戦ってくれ！', portrait: 'mitsunari' },
+  scene_alone: [
+    { speaker: '', text: '・・・気付けば一人、戦場の真ん中に立っていた。' },
+    { speaker: '', text: '遠くで剣戟の音。\n各所で乱戦が起きている。' },
+    { speaker: '', text: '聞き慣れない言葉、見たことのない者たち・・・\nなのに、なぜかすべての声が「理解できる」。' },
+    { speaker: '', text: '（皆、違う時代の言葉を話しているはずなのに——\nなぜか自然と頭に入ってくる）' },
+    { speaker: '', text: '（仲間を集めなければ。\nこの戦場を、一人では生き抜けない——）' },
   ],
   get_katana: [
-    { speaker: '石田三成', text: 'これを使え。', portrait: 'mitsunari' },
+    { speaker: '', text: '足元にカタナが落ちている・・・' },
     { speaker: '', text: 'ノービスカタナを手に入れた！' },
-    { speaker: '石田三成', text: '来るぞ！　構えろ！', portrait: 'mitsunari' },
+    { speaker: '', text: '（右下の地図に、戦っている者たちが見える。\n近づけば、何かわかるかもしれない）' },
   ],
-  rescue_kaihime: [
-    { speaker: '甲斐姫', text: '助けてくれてありがとう！\n私も戦わせて！', portrait: 'kaihime' },
+  encounter_mitsunari: [
+    { speaker: '？？？', text: '——援軍はまだか・・・！' },
+    { speaker: '？？？', text: 'そこの者、何者だ！？', portrait: 'mitsunari' },
+    { speaker: '', text: '（古い武家の言葉・・・\nなのに、自然と理解できる）' },
+    { speaker: '？？？', text: '・・・？　お主、我の言葉がわかるのか？', portrait: 'mitsunari' },
+    { speaker: '石田三成', text: '我は石田三成。\nこの混乱の中で意思を通わせる者がいるとは・・・！', portrait: 'mitsunari' },
+    { speaker: '石田三成', text: 'ここはクリプトワールド——\n現実とは異なる、歪んだもう一つの世界。', portrait: 'mitsunari' },
+    { speaker: '石田三成', text: '北の本陣に「アッティラ」と名乗る侵略者がいる。\n奴を討たねば、この戦は終わらぬ。', portrait: 'mitsunari' },
+    { speaker: '石田三成', text: 'だが一人では届かぬ。\nまずは他の戦士たちを集めるのだ。共に行こう！', portrait: 'mitsunari' },
+    { speaker: '', text: '石田三成が仲間になった！' },
   ],
-  rescue_ranmaru: [
-    { speaker: '森蘭丸', text: '感謝する！\n拙者の弓が役に立つはずだ。', portrait: 'ranmaru' },
+  encounter_kaihime: [
+    { speaker: '？？？', text: 'まだ・・・倒れぬ・・・！' },
+    { speaker: '？？？', text: 'あなた・・・誰？\n私の言葉、わかるの・・・！？', portrait: 'kaihime' },
+    { speaker: '甲斐姫', text: 'よかった・・・！\n私は甲斐姫。一人で戦い続けて、限界が近かった。', portrait: 'kaihime' },
+    { speaker: '甲斐姫', text: 'あなたが先頭に立ってくれるなら、\n私もまだ戦える！', portrait: 'kaihime' },
+    { speaker: '', text: '甲斐姫が仲間になった！' },
   ],
-  rescue_yukimura: [
-    { speaker: '真田幸村', text: '日本一の兵、真田幸村！\nここからが本番だ！', portrait: 'yukimura' },
+  encounter_ranmaru: [
+    { speaker: '？？？', text: 'ふぅ・・・矢が尽きかけている・・・' },
+    { speaker: '？？？', text: 'そこの方、言葉が通じるのか・・・！？', portrait: 'ranmaru' },
+    { speaker: '森蘭丸', text: '拙者は森蘭丸。\n敵に囲まれ、孤立していた。', portrait: 'ranmaru' },
+    { speaker: '森蘭丸', text: '貴殿が我らをつなぐ要となるならば、\nこの弓、共に振るおう。', portrait: 'ranmaru' },
+    { speaker: '', text: '森蘭丸が仲間になった！' },
+  ],
+  encounter_yukimura: [
+    { speaker: '？？？', text: 'ハァッ・・・ハァッ・・・！\nまだ・・・倒れぬぞ・・・！' },
+    { speaker: '？？？', text: 'お主・・・！　言葉が通じるか・・・！？', portrait: 'yukimura' },
+    { speaker: '真田幸村', text: '日本一の兵、真田幸村！\n孤軍奮闘していたが、もはや限界よ。', portrait: 'yukimura' },
+    { speaker: '真田幸村', text: 'お主のような者が現れるとは・・・運命か。\n敵将アッティラまで、共に駆けようぞ！', portrait: 'yukimura' },
+    { speaker: '', text: '真田幸村が仲間になった！' },
+  ],
+  attila_approach: [
+    { speaker: '石田三成', text: 'あれが・・・敵将アッティラ。\n奴を討てば、この戦は終わる。', portrait: 'mitsunari' },
+    { speaker: '甲斐姫', text: 'みんなで力を合わせれば、必ず勝てる！', portrait: 'kaihime' },
+    { speaker: '', text: '（バラバラだった英雄たちが、\nあなたを中心に一つになった——）' },
   ],
   battle_victory: [
-    { speaker: '石田三成', text: '・・・やったぞ！', portrait: 'mitsunari' },
-    { speaker: '石田三成', text: 'お主は強い。この世界に来た意味があるのだろう。', portrait: 'mitsunari' },
-    { speaker: '', text: '（クリプトワールド・・・\nこの不思議な世界で、冒険は始まったばかりだ——）' },
+    { speaker: '', text: '・・・敵将アッティラ、討ち取った！' },
+    { speaker: '石田三成', text: 'やったぞ・・・！\nお主のおかげだ。', portrait: 'mitsunari' },
+    { speaker: '甲斐姫', text: 'みんなの言葉が通じあう・・・\nこんな戦い方ができるなんて思いもしなかった！', portrait: 'kaihime' },
+    { speaker: '真田幸村', text: 'お主こそ、この世界に必要な存在だ。', portrait: 'yukimura' },
+    { speaker: '', text: '（クリプトワールドの戦いは、まだ始まったばかり——）' },
   ],
 };
 

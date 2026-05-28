@@ -83,42 +83,76 @@ export class GameEngine {
     await Promise.all(promises);
   }
 
-  initStage(stageKey, partyHeroes) {
+  initStage(stageKey, partyHeroes, heroDefMap) {
     const stage = STAGE_WAVES[stageKey];
+    this.stage = stage;
+    this.heroDefMap = heroDefMap || {};
     this.fieldSize = stage.fieldSize || 2000;
-    this.laneWidth = stage.laneWidth || 0;
-    this.stageDuration = stage.duration;
-    this.waves = stage.waves;
+    this.laneWidth = 0;
+    this.stageDuration = stage.duration || 0;
     this.xpTable = stage.xpTable || [];
     this.stageTime = 0;
-    this.waveIndex = 0;
     this.spawnTimer = 0;
     this.spawnQueue = [];
+    this.ambientTimer = 0;
+    this.bossGuardTimer = 0;
     this.xp = 0;
     this.level = 1;
     this.kills = 0;
-    this.totalEnemies = stage.totalEnemies || 0;
+    this.totalEnemies = 0;
     this.spawnedCount = 0;
     this.allyPhyBuff = 1.0;
     this.pickupRangeBonus = 0;
+    this.bossDefeated = false;
 
     this.enemies = [];
     this.projectiles = [];
     this.pickups = [];
     this.particles = [];
     this.allies = [];
+    this.fieldHeroes = [];
+    this.boss = null;
+    this.pendingEncounter = null;
 
-    const cx = this.fieldSize / 2;
-    const cy = this.fieldSize / 2;
-
+    const start = stage.playerStart || { x: this.fieldSize / 2, y: this.fieldSize / 2 };
     const playerDef = partyHeroes[0];
-    this.player = this._createUnit(playerDef, cx, cy, true);
+    this.player = this._createUnit(playerDef, start.x, start.y, true);
     this.player.isPlayer = true;
 
-    for (let i = 1; i < partyHeroes.length; i++) {
-      const angle = (i / (partyHeroes.length - 1)) * PI2;
-      const ally = this._createUnit(partyHeroes[i], cx + Math.cos(angle) * 50, cy + Math.sin(angle) * 50, true);
-      this.allies.push(ally);
+    // フィールド上の戦闘中ヒーローを配置
+    if (stage.fieldHeroes && this.heroDefMap) {
+      for (const spot of stage.fieldHeroes) {
+        const def = this.heroDefMap[spot.heroKey];
+        if (!def) continue;
+        const unit = this._createUnit(def, spot.x, spot.y, true);
+        unit.isFieldHero = true;
+        unit.heroKey = spot.heroKey;
+        this.fieldHeroes.push({
+          heroKey: spot.heroKey,
+          x: spot.x, y: spot.y,
+          encounterRange: spot.encounterRange || 120,
+          unit, recruited: false,
+        });
+      }
+    }
+
+    // 敵将を配置
+    if (stage.boss && this.heroDefMap) {
+      const bossDef = this.heroDefMap[stage.boss.heroKey];
+      if (bossDef) {
+        const s = bossDef.baseStats;
+        this.boss = {
+          id: 'boss', name: bossDef.name, imageId: bossDef.imageId,
+          x: stage.boss.x, y: stage.boss.y, radius: 28,
+          hp: s.maxHp, maxHp: s.maxHp,
+          phy: s.phy, int: s.int, agi: s.agi,
+          atkSpeed: s.atkSpeed, atkRange: s.atkRange,
+          atkType: bossDef.atkType, atkPattern: bossDef.atkPattern,
+          atkTimer: 0, alive: true, flash: 0, scale: 2.5,
+          spriteKey: `hero_${bossDef.imageId}`,
+          isBoss: true, isHeroSprite: true,
+        };
+      }
     }
   }
 
@@ -173,9 +207,12 @@ export class GameEngine {
       this.screenShakeY = (Math.random() - 0.5) * this.screenShake * 20;
     } else { this.screenShakeX = 0; this.screenShakeY = 0; }
 
-    this._processWaves(dt);
+    this._updateFieldSpawn(dt);
     this._updatePlayer(dt);
     this._updateAllies(dt);
+    this._updateFieldHeroes(dt);
+    this._updateBoss(dt);
+    this._checkEncounters();
     this._updateEnemies(dt);
     this._updateProjectiles(dt);
     this._updatePickups(dt);
@@ -187,80 +224,166 @@ export class GameEngine {
       this.stop();
       this.onDefeat();
     }
-    const remaining = this.totalEnemies - this.kills;
-    if (this.totalEnemies > 0 && remaining <= 0 && this.enemies.length === 0 && this.spawnQueue.length === 0 && this.onVictory) {
+    if (this.bossDefeated && this.onVictory) {
       this.stop();
       this.onVictory({ kills: this.kills, level: this.level, time: this.stageTime });
     }
   }
 
-  _processWaves(dt) {
-    while (this.waveIndex < this.waves.length && this.stageTime >= this.waves[this.waveIndex].time) {
-      const wave = this.waves[this.waveIndex];
-      if (wave.event === 'rescue' && this.onRescue) {
-        this.onRescue(wave.heroKey);
-      } else if (wave.event === 'boss' && this.onBoss) {
-        this.onBoss(wave);
-      } else if (wave.enemies) {
-        for (let i = 0; i < wave.count; i++) {
-          this.spawnQueue.push({
-            type: wave.enemies[i % wave.enemies.length],
-            delay: i * wave.interval,
-            spawnDir: wave.spawnDir || null,
-          });
+  _updateFieldSpawn(dt) {
+    if (!this.stage) return;
+
+    // 各フィールドヒーロー周辺に敵を湧かせる（未邂逅のヒーローのみ）
+    const heroEnemies = this.stage.heroBattleEnemies;
+    if (heroEnemies && heroEnemies.length) {
+      for (const fh of this.fieldHeroes) {
+        if (fh.recruited) continue;
+        fh._spawnTimer = (fh._spawnTimer || 0) - dt;
+        // ヒーロー周辺の敵数を数える
+        let nearby = 0;
+        for (const e of this.enemies) {
+          const d2 = (e.x - fh.x) ** 2 + (e.y - fh.y) ** 2;
+          if (d2 < 250 * 250) nearby++;
+        }
+        if (fh._spawnTimer <= 0 && nearby < 6) {
+          const type = heroEnemies[Math.floor(Math.random() * heroEnemies.length)];
+          this._spawnEnemyAt(type, fh.x, fh.y, 220 + Math.random() * 60);
+          fh._spawnTimer = 0.8 + Math.random() * 0.6;
         }
       }
-      this.waveIndex++;
     }
 
-    for (let i = this.spawnQueue.length - 1; i >= 0; i--) {
-      this.spawnQueue[i].delay -= dt;
-      if (this.spawnQueue[i].delay <= 0) {
-        this._spawnEnemy(this.spawnQueue[i].type, { spawnDir: this.spawnQueue[i].spawnDir });
-        this.spawnQueue.splice(i, 1);
+    // プレイヤー周辺のランダムスポーン
+    const amb = this.stage.ambientSpawn;
+    if (amb) {
+      this.ambientTimer -= dt;
+      const nearbyToPlayer = this.enemies.filter(e =>
+        (e.x - this.player.x) ** 2 + (e.y - this.player.y) ** 2 < 600 * 600
+      ).length;
+      if (this.ambientTimer <= 0 && nearbyToPlayer < (amb.maxAround || 60)) {
+        const type = amb.enemies[Math.floor(Math.random() * amb.enemies.length)];
+        this._spawnEnemyAt(type, this.player.x, this.player.y, 380 + Math.random() * 120);
+        this.ambientTimer = amb.interval;
+      }
+    }
+
+    // 敵将本陣周辺に精鋭を湧かせる
+    if (this.boss && this.boss.alive && this.stage.bossGuards) {
+      this.bossGuardTimer -= dt;
+      let nearBoss = 0;
+      for (const e of this.enemies) {
+        const d2 = (e.x - this.boss.x) ** 2 + (e.y - this.boss.y) ** 2;
+        if (d2 < 350 * 350) nearBoss++;
+      }
+      if (this.bossGuardTimer <= 0 && nearBoss < 12) {
+        const type = this.stage.bossGuards[Math.floor(Math.random() * this.stage.bossGuards.length)];
+        this._spawnEnemyAt(type, this.boss.x, this.boss.y, 200 + Math.random() * 100);
+        this.bossGuardTimer = this.stage.bossGuardInterval || 0.3;
       }
     }
   }
 
-  _spawnEnemy(typeKey, options = {}) {
-    if (this.enemies.length >= 300 && !options.isBoss) return;
+  _spawnEnemyAt(typeKey, cx, cy, dist) {
+    if (this.enemies.length >= 350) return;
     const def = ENEMY_TYPES[typeKey];
     if (!def) return;
-    let angle;
-    if (options.spawnDir) {
-      const [center, spread] = options.spawnDir;
-      angle = center + (Math.random() - 0.5) * 2 * spread;
-    } else {
-      angle = Math.random() * PI2;
-    }
-    const dist = Math.max(this.vw, this.vh) * 0.6 + Math.random() * 100;
-    const x = this.player.x + Math.cos(angle) * dist;
-    const y = this.player.y + Math.sin(angle) * dist;
-    const scale = options.scale || 1;
-    const clampedX = this.laneWidth
-      ? Math.max(this.fieldSize / 2 - this.laneWidth / 2, Math.min(this.fieldSize / 2 + this.laneWidth / 2, x))
-      : Math.max(20, Math.min(this.fieldSize - 20, x));
+    const angle = Math.random() * PI2;
+    const x = Math.max(20, Math.min(this.fieldSize - 20, cx + Math.cos(angle) * dist));
+    const y = Math.max(20, Math.min(this.fieldSize - 20, cy + Math.sin(angle) * dist));
     const e = {
       id: `e_${Date.now()}_${Math.random()}`,
       name: def.name, imageId: def.imageId,
-      x: clampedX,
-      y: Math.max(20, Math.min(this.fieldSize - 20, y)),
-      radius: def.radius * scale,
-      hp: def.hp * (options.hpMul || 1), maxHp: def.hp * (options.hpMul || 1),
-      phy: def.phy * (options.dmgMul || 1), speed: def.speed,
-      xpValue: def.xp * scale, alive: true, flash: 0,
-      spriteKey: `enemy_${def.imageId}`, scale,
-      isBoss: !!options.isBoss,
+      x, y, radius: def.radius,
+      hp: def.hp, maxHp: def.hp,
+      phy: def.phy, speed: def.speed,
+      xpValue: def.xp, alive: true, flash: 0,
+      spriteKey: `enemy_${def.imageId}`, scale: 1,
     };
     this.enemies.push(e);
     this.spawnedCount++;
+    this.totalEnemies++;
   }
 
-  spawnBoss(wave) {
-    this._spawnEnemy(wave.bossType, {
-      scale: wave.bossScale || 2, hpMul: wave.bossHpMul || 5,
-      dmgMul: wave.bossDmgMul || 2, isBoss: true,
-    });
+  _updateFieldHeroes(dt) {
+    for (const fh of this.fieldHeroes) {
+      if (fh.recruited) continue;
+      const u = fh.unit;
+      if (!u.alive) continue;
+      // ヒーローは自分の拠点近くに留まる
+      const dx = fh.x - u.x, dy = fh.y - u.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 30) {
+        u.x += (dx / dist) * u.agi * 0.5 * dt;
+        u.y += (dy / dist) * u.agi * 0.5 * dt;
+      }
+      // 敵に向かう
+      const target = this._findNearest(u, this.enemies, u.atkRange * 2.5);
+      if (target) {
+        u.facingX = target.x - u.x; u.facingY = target.y - u.y;
+        const m = Math.sqrt(u.facingX ** 2 + u.facingY ** 2);
+        if (m > 0) { u.facingX /= m; u.facingY /= m; }
+      }
+      this._contactAttack(u, dt);
+      u.flash = Math.max(0, u.flash - dt * 5);
+    }
+  }
+
+  _updateBoss(dt) {
+    if (!this.boss || !this.boss.alive) return;
+    const b = this.boss;
+    // プレイヤーが300px以内に来たら反応開始
+    const dxp = this.player.x - b.x, dyp = this.player.y - b.y;
+    const distToPlayer = Math.sqrt(dxp * dxp + dyp * dyp);
+    if (distToPlayer < 500) {
+      const speed = b.agi * 0.8;
+      if (distToPlayer > b.atkRange) {
+        b.x += (dxp / distToPlayer) * speed * dt;
+        b.y += (dyp / distToPlayer) * speed * dt;
+      }
+      b.facingX = dxp / distToPlayer; b.facingY = dyp / distToPlayer;
+      b.atkTimer += dt;
+      if (b.atkTimer >= 1.0 / b.atkSpeed) {
+        b.atkTimer = 0;
+        // 周囲の味方を攻撃
+        const targets = [this.player, ...this.allies].filter(a => a.alive);
+        for (const t of targets) {
+          const d2 = (t.x - b.x) ** 2 + (t.y - b.y) ** 2;
+          if (d2 < (b.atkRange + 20) ** 2) {
+            const dmg = Math.floor(b.phy * (0.8 + Math.random() * 0.4));
+            t.hp -= dmg;
+            t.flash = 1;
+            if (t.hp <= 0) { t.alive = false; t.hp = 0; }
+            this.particles.push({ x: t.x, y: t.y, type: 'burst', timer: 0.4, vx: 0, vy: -50, color: '#ff4040' });
+          }
+        }
+        audio.playSe('critical');
+      }
+    }
+    b.flash = Math.max(0, b.flash - dt * 5);
+  }
+
+  _checkEncounters() {
+    if (this.pendingEncounter) return;
+    for (const fh of this.fieldHeroes) {
+      if (fh.recruited) continue;
+      const dx = this.player.x - fh.x, dy = this.player.y - fh.y;
+      if (dx * dx + dy * dy < fh.encounterRange ** 2) {
+        this.pendingEncounter = fh;
+        if (this.onEncounter) this.onEncounter(fh);
+        return;
+      }
+    }
+  }
+
+  completeEncounter(fh) {
+    fh.recruited = true;
+    // フィールドヒーローを通常の味方として追加
+    const def = this.heroDefMap[fh.heroKey];
+    if (def) {
+      const ally = this._createUnit(def, this.player.x + (Math.random() - 0.5) * 60, this.player.y + (Math.random() - 0.5) * 60, true);
+      this.allies.push(ally);
+    }
+    this.pendingEncounter = null;
   }
 
   addAlly(heroDef) {
@@ -283,10 +406,8 @@ export class GameEngine {
     const mag = Math.sqrt(this.input.dx ** 2 + this.input.dy ** 2);
     if (mag > 0.1) {
       const nx = this.input.dx / mag, ny = this.input.dy / mag;
-      p.x += nx * speed * dt;
-      p.y += ny * speed * dt;
-      p.x = this._clampToLane(p.x);
-      p.y = Math.max(p.radius, Math.min(this.fieldSize - p.radius, p.y));
+      p.x = Math.max(p.radius, Math.min(this.fieldSize - p.radius, p.x + nx * speed * dt));
+      p.y = Math.max(p.radius, Math.min(this.fieldSize - p.radius, p.y + ny * speed * dt));
       p.facingX = nx; p.facingY = ny;
     }
     this._contactAttack(p, dt);
@@ -331,8 +452,6 @@ export class GameEngine {
           a.y = Math.max(a.radius, Math.min(this.fieldSize - a.radius, a.y));
         }
       }
-
-      a.x = this._clampToLane(a.x);
 
       if (a.atkType === 'heal') {
         this._healAlly(a, dt);
@@ -398,7 +517,8 @@ export class GameEngine {
     let hitCount = 0;
     const knockStr = pattern === 'wave' ? 120 : pattern === 'spear' ? 80 : 60;
 
-    for (const e of this.enemies) {
+    const candidates = this.boss && this.boss.alive ? [...this.enemies, this.boss] : this.enemies;
+    for (const e of candidates) {
       if (!e.alive) continue;
       const dx = e.x - attacker.x, dy = e.y - attacker.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -411,10 +531,14 @@ export class GameEngine {
       if (Math.abs(diff) > arc / 2 && pattern !== 'wave') continue;
 
       const finalDmg = pattern === 'rapid' ? Math.floor(dmg * 0.6) : dmg;
-      this._damageEnemy(e, finalDmg);
-      if (d > 0) {
-        e.knockX = (dx / d) * knockStr;
-        e.knockY = (dy / d) * knockStr;
+      if (e.isBoss) {
+        this._damageBoss(e, finalDmg);
+      } else {
+        this._damageEnemy(e, finalDmg);
+        if (d > 0) {
+          e.knockX = (dx / d) * knockStr;
+          e.knockY = (dy / d) * knockStr;
+        }
       }
       hitCount++;
     }
@@ -504,6 +628,31 @@ export class GameEngine {
     }
   }
 
+  _damageBoss(boss, dmg) {
+    boss.hp -= dmg;
+    boss.flash = 1;
+    this.particles.push({
+      x: boss.x, y: boss.y, type: 'burst', timer: 0.3,
+      vx: (Math.random() - 0.5) * 80, vy: (Math.random() - 0.5) * 80, color: '#ffd700',
+    });
+    if (boss.hp <= 0) {
+      boss.alive = false;
+      this.bossDefeated = true;
+      this.kills++;
+      this.screenShake = 1.0;
+      for (let i = 0; i < 24; i++) {
+        this.particles.push({
+          x: boss.x, y: boss.y, type: 'burst',
+          timer: 0.5 + Math.random() * 0.5,
+          vx: (Math.random() - 0.5) * 300,
+          vy: (Math.random() - 0.5) * 300,
+          color: '#ffd700',
+        });
+      }
+      audio.playSe('victory');
+    }
+  }
+
   _dropXp(x, y, amount) {
     if (this.pickups.length > 400) {
       this.xp += amount;
@@ -556,6 +705,15 @@ export class GameEngine {
       if (p.timer >= p.lifetime) { this.projectiles.splice(i, 1); continue; }
 
       if (p.fromAlly) {
+        let consumed = false;
+        if (this.boss && this.boss.alive) {
+          if ((p.x - this.boss.x) ** 2 + (p.y - this.boss.y) ** 2 < (p.radius + this.boss.radius) ** 2) {
+            this._damageBoss(this.boss, p.dmg);
+            if (p.pierce > 0) p.pierce--;
+            else { this.projectiles.splice(i, 1); consumed = true; }
+          }
+        }
+        if (consumed) continue;
         for (const e of this.enemies) {
           if (!e.alive) continue;
           if ((p.x - e.x) ** 2 + (p.y - e.y) ** 2 < (p.radius + e.radius) ** 2) {
@@ -674,11 +832,167 @@ export class GameEngine {
     this._drawField(ctx, cam);
     this._drawPickups(ctx, cam);
     this._drawEnemies(ctx, cam);
+    this._drawBoss(ctx, cam);
+    this._drawFieldHeroes(ctx, cam);
     this._drawProjectiles(ctx, cam);
     this._drawAllies(ctx, cam);
     this._drawPlayer(ctx, cam);
     this._drawParticles(ctx, cam);
     this._drawCombo(ctx);
+    this._drawBossHpBar(ctx);
+    this._drawMinimap(ctx);
+  }
+
+  _drawBoss(ctx, cam) {
+    if (!this.boss) return;
+    if (!this.boss.alive) return;
+    const sz = 64 * (this.boss.scale || 2);
+    this._drawSprite(ctx, cam, this.boss, sz);
+    // 王冠マーク
+    const sx = this.boss.x - cam.x, sy = this.boss.y - cam.y - sz / 2 - 18;
+    if (sx > -50 && sx < this.vw + 50 && sy > -20 && sy < this.vh + 20) {
+      ctx.save();
+      ctx.fillStyle = '#ff3030';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('▼ 敵将', sx, sy);
+      ctx.restore();
+    }
+  }
+
+  _drawFieldHeroes(ctx, cam) {
+    for (const fh of this.fieldHeroes) {
+      if (fh.recruited || !fh.unit.alive) continue;
+      const sz = 44;
+      this._drawSprite(ctx, cam, fh.unit, sz);
+      this._drawHpBar(ctx, cam, fh.unit, sz);
+      const sx = fh.x - cam.x, sy = fh.y - cam.y - sz / 2 - 14;
+      if (sx > -100 && sx < this.vw + 100 && sy > -20 && sy < this.vh + 20) {
+        ctx.save();
+        ctx.fillStyle = '#56ccf2';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(`▽ ${fh.unit.name}`, sx, sy);
+        ctx.restore();
+      }
+    }
+  }
+
+  _drawBossHpBar(ctx) {
+    if (!this.boss || !this.boss.alive) return;
+    const dxp = (this.boss.x - this.player.x) ** 2 + (this.boss.y - this.player.y) ** 2;
+    if (dxp > 700 * 700) return;
+    const w = Math.min(this.vw - 40, 480);
+    const h = 14;
+    const x = (this.vw - w) / 2;
+    const y = 50;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = '#3a0a0a';
+    ctx.fillRect(x, y, w, h);
+    const ratio = Math.max(0, this.boss.hp / this.boss.maxHp);
+    const grad = ctx.createLinearGradient(x, y, x + w, y);
+    grad.addColorStop(0, '#ff4040'); grad.addColorStop(1, '#ff8040');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w * ratio, h);
+    ctx.strokeStyle = '#ff8080';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(`敵将  ${this.boss.name}`, this.vw / 2, y - 5);
+    ctx.restore();
+  }
+
+  _drawMinimap(ctx) {
+    const isMobile = this.vw < 600;
+    const mapSize = isMobile ? 120 : 160;
+    const margin = 12;
+    const mx = this.vw - mapSize - margin;
+    const my = this.vh - mapSize - margin;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(mx - 4, my - 4, mapSize + 8, mapSize + 8);
+    ctx.fillStyle = 'rgba(20,30,15,0.8)';
+    ctx.fillRect(mx, my, mapSize, mapSize);
+    ctx.strokeStyle = 'rgba(196,163,90,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(mx, my, mapSize, mapSize);
+
+    const fs = this.fieldSize;
+    const toMapX = wx => mx + (wx / fs) * mapSize;
+    const toMapY = wy => my + (wy / fs) * mapSize;
+
+    // ビューポート枠
+    const vx1 = toMapX(this.cam.x);
+    const vy1 = toMapY(this.cam.y);
+    const vw1 = (this.vw / fs) * mapSize;
+    const vh1 = (this.vh / fs) * mapSize;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(vx1, vy1, vw1, vh1);
+
+    // 敵（小さな赤点、間引き）
+    ctx.fillStyle = 'rgba(231,96,96,0.7)';
+    for (let i = 0; i < this.enemies.length; i += 2) {
+      const e = this.enemies[i];
+      if (!e.alive) continue;
+      ctx.fillRect(toMapX(e.x) - 1, toMapY(e.y) - 1, 2, 2);
+    }
+
+    // 未邂逅ヒーロー（青）
+    for (const fh of this.fieldHeroes) {
+      if (fh.recruited || !fh.unit.alive) continue;
+      const hx = toMapX(fh.x), hy = toMapY(fh.y);
+      const pulse = 1 + Math.sin(performance.now() / 200) * 0.3;
+      ctx.fillStyle = '#56ccf2';
+      ctx.beginPath(); ctx.arc(hx, hy, 4 * pulse, 0, PI2); ctx.fill();
+      ctx.strokeStyle = '#88ddff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(hx, hy, 6 * pulse, 0, PI2); ctx.stroke();
+    }
+
+    // 仲間（緑）
+    ctx.fillStyle = '#5ecf8a';
+    for (const a of this.allies) {
+      if (!a.alive) continue;
+      ctx.beginPath(); ctx.arc(toMapX(a.x), toMapY(a.y), 2.5, 0, PI2); ctx.fill();
+    }
+
+    // 敵将（赤い星）
+    if (this.boss && this.boss.alive) {
+      const bx = toMapX(this.boss.x), by = toMapY(this.boss.y);
+      const pulse = 1 + Math.sin(performance.now() / 150) * 0.4;
+      ctx.fillStyle = '#ff3030';
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + i * (PI2 / 5);
+        const r = i % 2 === 0 ? 6 * pulse : 3 * pulse;
+        const px = bx + Math.cos(a) * r, py = by + Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+
+    // プレイヤー（金色、点滅）
+    const pulse = 1 + Math.sin(performance.now() / 180) * 0.25;
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath(); ctx.arc(toMapX(this.player.x), toMapY(this.player.y), 4 * pulse, 0, PI2); ctx.fill();
+
+    // ラベル
+    ctx.fillStyle = 'rgba(196,163,90,0.9)';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('MAP', mx + 3, my + 11);
+
+    ctx.restore();
   }
 
   _drawField(ctx, cam) {
@@ -698,19 +1012,10 @@ export class GameEngine {
       ctx.beginPath(); ctx.moveTo(0, y - cam.y); ctx.lineTo(this.vw, y - cam.y); ctx.stroke();
     }
 
-    if (this.laneWidth) {
-      const center = this.fieldSize / 2;
-      const half = this.laneWidth / 2;
-      const leftWall = center - half - cam.x;
-      const rightWall = center + half - cam.x;
-      ctx.fillStyle = '#1a2a0a';
-      ctx.fillRect(0, 0, Math.max(0, leftWall), this.vh);
-      ctx.fillRect(rightWall, 0, this.vw - rightWall, this.vh);
-      ctx.strokeStyle = 'rgba(120,100,60,0.5)';
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(leftWall, 0); ctx.lineTo(leftWall, this.vh); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(rightWall, 0); ctx.lineTo(rightWall, this.vh); ctx.stroke();
-    }
+    // フィールド境界
+    ctx.strokeStyle = 'rgba(120,100,60,0.4)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-cam.x, -cam.y, this.fieldSize, this.fieldSize);
   }
 
   _drawSprite(ctx, cam, entity, size) {
@@ -903,10 +1208,13 @@ export class GameEngine {
     this.hud.hpText.textContent = `${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`;
     this.hud.xpBar.style.width = `${xpRatio * 100}%`;
     this.hud.level.textContent = `Lv.${this.level}`;
-    this.hud.timer.textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+    const elapsedMin = Math.floor(this.stageTime / 60);
+    const elapsedSec = Math.floor(this.stageTime % 60);
+    this.hud.timer.textContent = `${elapsedMin}:${elapsedSec.toString().padStart(2, '0')}`;
     this.hud.kills.textContent = `${this.kills} KILLS`;
-    const remain = Math.max(0, this.totalEnemies - this.kills);
-    this.hud.remaining.textContent = `残 ${remain}`;
+    const totalSpots = (this.stage && this.stage.fieldHeroes) ? this.stage.fieldHeroes.length : 0;
+    const recruited = this.fieldHeroes.filter(f => f.recruited).length;
+    this.hud.remaining.textContent = `仲間 ${recruited}/${totalSpots}`;
     this.hud.allies.textContent = `×${this.allies.filter(a => a.alive).length + 1}`;
   }
 
