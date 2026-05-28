@@ -323,6 +323,16 @@ async function showStageClearResult(result, rewards) {
   return new Promise(resolve => {
     const ctx = { skip: false, finished: false };
     let resolved = false;
+    const btn = $('resultNext');
+
+    const finish = () => {
+      if (ctx.finished) return;
+      ctx.skip = true;
+      finalizeSnapshots(rewards.snapshots);
+      ctx.finished = true;
+      btn.textContent = 'ワールドマップへ';
+      btn.classList.remove('result__btn--skipping');
+    };
 
     const advance = () => {
       if (resolved) return;
@@ -333,31 +343,28 @@ async function showStageClearResult(result, rewards) {
       resolve();
     };
 
-    const onTap = (e) => {
-      // ボタン側のクリックでも同じ経路を辿る
-      if (ctx.finished) {
-        advance();
-      } else {
-        // アニメ中: スキップ要求
-        ctx.skip = true;
-      }
+    // 1回目のタップ: スキップ → 即座に最終状態へ
+    // 2回目のタップ: ワールドマップへ遷移
+    // ボタンも背景も同じハンドラ
+    const onTap = () => {
+      if (!ctx.finished) finish();
+      else advance();
     };
 
-    // 画面どこでもタップでスキップ/進行
+    // 画面/ボタン両方で受け付ける（ボタンも普通にバブルさせる）
     resultLayer.addEventListener('click', onTap);
-    // 「ワールドマップへ」ボタンは最初から押せるように
-    $('resultNext').addEventListener('click', (e) => { e.stopPropagation(); onTap(e); });
-    // タップ案内をボタン上に表示
-    const btn = $('resultNext');
+    // タッチデバイス即応のため touchstart も同梱
+    resultLayer.addEventListener('touchstart', e => {
+      e.preventDefault();
+      onTap();
+    }, { passive: false });
+
     btn.textContent = 'タップでスキップ';
     btn.classList.add('result__btn--skipping');
 
-    sleep(500).then(() => animatePartyXpGain(rewards.snapshots, ctx)).then(() => {
-      // 最終状態を適用
-      finalizeSnapshots(rewards.snapshots);
-      ctx.finished = true;
-      btn.textContent = 'ワールドマップへ';
-      btn.classList.remove('result__btn--skipping');
+    sleep(400).then(() => animatePartyXpGain(rewards.snapshots, ctx)).then(() => {
+      // 自然終了時もfinalizeを通して状態を統一
+      finish();
     });
   });
 }
@@ -439,11 +446,17 @@ function animateLevelUp(row, newLevel, durationMs, ctx) {
     row.classList.add('party-row--levelup');
     fx.classList.remove('hidden');
     lvNum.textContent = newLevel;
-    setTimeout(() => {
-      fx.classList.add('hidden');
-      row.classList.remove('party-row--levelup');
-      resolve();
-    }, durationMs || 700);
+    const dur = durationMs || 700;
+    const start = performance.now();
+    // setIntervalで定期的にskip検出
+    const interval = setInterval(() => {
+      if ((ctx && ctx.skip) || performance.now() - start >= dur) {
+        clearInterval(interval);
+        fx.classList.add('hidden');
+        row.classList.remove('party-row--levelup');
+        resolve();
+      }
+    }, 30);
   });
 }
 

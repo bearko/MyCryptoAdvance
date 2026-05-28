@@ -852,10 +852,11 @@ export class GameEngine {
 
   _drawMinimap(ctx) {
     const isMobile = this.vw < 600;
-    const mapSize = isMobile ? 120 : 160;
+    const mapSize = isMobile ? 110 : 150;
     const margin = 12;
     const mx = this.vw - mapSize - margin;
-    const my = this.vh - mapSize - margin;
+    // 右上配置（HUDのstatsエリアより少し下に余白を取って衝突回避）
+    const my = margin + (isMobile ? 56 : 64);
 
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
