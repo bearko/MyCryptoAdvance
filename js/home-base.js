@@ -159,18 +159,21 @@ export class HomeBase {
   }
 
   _advanceTurn() {
+    if (this._advancing) return; // 連打防止
+    this._advancing = true;
     audio.playSe('confirm');
     const prod = this._calcProductionPreview();
     const result = partyState.advanceTurn(prod);
     this._render();
     if (result.event) {
-      this._showEventModal(result.event);
-    } else if (result.starvation > 0) {
-      this._showToast(`兵糧不足！ 兵士-${result.starvation}`);
+      this._showEventModal(result.event, () => { this._advancing = false; });
+    } else {
+      if (result.starvation > 0) this._showToast(`兵糧不足！ 兵士-${result.starvation}`);
+      this._advancing = false;
     }
   }
 
-  _showEventModal(event) {
+  _showEventModal(event, onClose) {
     const modal = document.createElement('div');
     modal.className = 'wm-modal-bg';
     const e = event.effect;
@@ -195,6 +198,7 @@ export class HomeBase {
     modal.querySelector('#eventClose').addEventListener('click', () => {
       audio.playSe('confirm');
       modal.remove();
+      if (onClose) onClose();
     });
   }
 
