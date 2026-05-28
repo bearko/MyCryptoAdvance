@@ -14,58 +14,101 @@ export const ASSETS = {
 
 export const FACTION = { HERO: 'hero', NEUTRAL: 'neutral', INVADER: 'invader', CITIZEN: 'citizen' };
 
+// MyCryptoSurvivor準拠の基本定数
+export const MCS = {
+  PLAYER_RADIUS: 14,
+  HERO_HP_BASE: 80,
+  HERO_HP_PER_STAT: 0.20,
+  HERO_SPEED_BASE: 140,
+  HERO_SPEED_PER_AGI: 0.6,
+  ENEMY_HP_INITIAL: 30,
+  ENEMY_DMG: 10,
+  ENEMY_RADIUS: 12,
+  ENEMY_SPEED_PX_S: 80,
+  CONTACT_COOLDOWN_MS: 500,
+  XP_TO_NEXT_INITIAL: 4,
+  XP_TO_NEXT_GROWTH: 1.3,
+  EXT_MAX_LEVEL: 5,
+  PROJECTILE_LIFE_MS: 1500,
+  PROJECTILE_RADIUS: 5,
+  WEAPON_SIZE_GROWTH_PER_LEVEL: 0.25,
+  MAX_ENEMIES: 350,
+  JOYSTICK_RADIUS: 56,
+  JOYSTICK_DEADZONE: 8,
+};
+
 export const TACTIC = {
   AGGRESSIVE: { id: 'aggressive', name: 'ガンガンいこうぜ', desc: '攻撃重視', aggroRange: 1.5, healThreshold: 0.15, followDist: 120 },
   BALANCED:   { id: 'balanced',   name: 'バランスよく',     desc: '攻守バランス', aggroRange: 1.0, healThreshold: 0.35, followDist: 80 },
   DEFENSIVE:  { id: 'defensive',  name: 'いのちをだいじに', desc: '防御・回復重視', aggroRange: 0.6, healThreshold: 0.55, followDist: 50 },
 };
 
+// MCH原データのhp/phy/int/agiを保持。バトル時はMCS式で導出
+//   maxHp = HERO_HP_BASE + mchStats.hp × HERO_HP_PER_STAT
+//   speed = HERO_SPEED_BASE + mchStats.agi × HERO_SPEED_PER_AGI
 export const HEROES = {
   player:     { id: 'player', name: '？？？', imageId: 12001, faction: FACTION.HERO,
-    baseStats: { maxHp: 200, phy: 32, int: 15, agi: 55, atkSpeed: 2.0, atkRange: 55 },
-    atkType: 'none', atkPattern: 'none', growthRate: { maxHp: 20, phy: 4, int: 2, agi: 3 } },
+    mchStats: { hp: 100, phy: 40, int: 20, agi: 80 },
+    atkSpeed: 2.0, atkRange: 55, atkType: 'none', atkPattern: 'none',
+    startingExtension: 'novice_katana' },
 
   mitsunari:  { id: 'mitsunari', name: '石田三成', imageId: 2012, faction: FACTION.HERO,
-    baseStats: { maxHp: 300, phy: 35, int: 55, agi: 35, atkSpeed: 1.2, atkRange: 110 },
-    atkType: 'magic', atkPattern: 'bolt', growthRate: { maxHp: 25, phy: 3, int: 6, agi: 2 } },
+    mchStats: { hp: 246, phy: 79, int: 116, agi: 63 },
+    atkSpeed: 1.2, atkRange: 110, atkType: 'magic', atkPattern: 'bolt',
+    startingExtension: 'sensu' },
 
   kaihime:    { id: 'kaihime', name: '甲斐姫', imageId: 1002, faction: FACTION.HERO,
-    baseStats: { maxHp: 220, phy: 42, int: 15, agi: 65, atkSpeed: 2.8, atkRange: 45 },
-    atkType: 'melee', atkPattern: 'rapid', growthRate: { maxHp: 16, phy: 5, int: 1, agi: 5 } },
+    mchStats: { hp: 162, phy: 79, int: 45, agi: 118 },
+    atkSpeed: 2.8, atkRange: 45, atkType: 'melee', atkPattern: 'rapid',
+    startingExtension: 'rapier' },
 
   ranmaru:    { id: 'ranmaru', name: '森蘭丸', imageId: 2009, faction: FACTION.HERO,
-    baseStats: { maxHp: 250, phy: 30, int: 40, agi: 50, atkSpeed: 1.5, atkRange: 90 },
-    atkType: 'ranged', atkPattern: 'arrow', growthRate: { maxHp: 18, phy: 3, int: 4, agi: 4 } },
+    mchStats: { hp: 168, phy: 79, int: 98, agi: 107 },
+    atkSpeed: 1.5, atkRange: 90, atkType: 'ranged', atkPattern: 'arrow',
+    startingExtension: 'yumi' },
 
   yukimura:   { id: 'yukimura', name: '真田幸村', imageId: 3025, faction: FACTION.HERO,
-    baseStats: { maxHp: 280, phy: 55, int: 20, agi: 60, atkSpeed: 2.2, atkRange: 50 },
-    atkType: 'melee', atkPattern: 'spear', growthRate: { maxHp: 22, phy: 6, int: 2, agi: 4 } },
+    mchStats: { hp: 220, phy: 130, int: 60, agi: 110 },
+    atkSpeed: 2.2, atkRange: 50, atkType: 'melee', atkPattern: 'spear',
+    startingExtension: 'cross_spear' },
 
   nightingale:{ id: 'nightingale', name: 'ナイチンゲール', imageId: 4002, faction: FACTION.HERO,
-    baseStats: { maxHp: 180, phy: 10, int: 60, agi: 30, atkSpeed: 0.6, atkRange: 120 },
-    atkType: 'heal', atkPattern: 'aura', growthRate: { maxHp: 15, phy: 1, int: 7, agi: 2 } },
+    mchStats: { hp: 180, phy: 30, int: 150, agi: 80 },
+    atkSpeed: 0.6, atkRange: 120, atkType: 'heal', atkPattern: 'aura' },
 
   nobunaga:   { id: 'nobunaga', name: '織田信長', imageId: 5001, faction: FACTION.HERO,
-    baseStats: { maxHp: 350, phy: 55, int: 45, agi: 45, atkSpeed: 1.0, atkRange: 60 },
-    atkType: 'melee', atkPattern: 'wave', growthRate: { maxHp: 28, phy: 6, int: 4, agi: 3 } },
+    mchStats: { hp: 280, phy: 140, int: 100, agi: 100 },
+    atkSpeed: 1.0, atkRange: 60, atkType: 'melee', atkPattern: 'wave' },
 
   sun_tzu:    { id: 'sun_tzu', name: '孫子', imageId: 2011, faction: FACTION.HERO,
-    baseStats: { maxHp: 260, phy: 25, int: 65, agi: 40, atkSpeed: 0.7, atkRange: 140 },
-    atkType: 'magic', atkPattern: 'field', growthRate: { maxHp: 20, phy: 2, int: 7, agi: 3 } },
+    mchStats: { hp: 200, phy: 50, int: 160, agi: 90 },
+    atkSpeed: 0.7, atkRange: 140, atkType: 'magic', atkPattern: 'field' },
 
-  // 敵将（侵略者）
+  // 侵略者（ワールド1ボス）
   attila:     { id: 'attila', name: 'アッティラ', imageId: 3047, faction: FACTION.INVADER,
-    baseStats: { maxHp: 1800, phy: 65, int: 40, agi: 50, atkSpeed: 1.5, atkRange: 80 },
-    atkType: 'melee', atkPattern: 'wave', growthRate: { maxHp: 50, phy: 8, int: 4, agi: 4 } },
+    mchStats: { hp: 600, phy: 200, int: 100, agi: 80 },
+    atkSpeed: 1.5, atkRange: 80, atkType: 'melee', atkPattern: 'wave' },
 
-  // Citizens
+  // 市民
   etheremon:  { id: 'etheremon', name: 'ETHEREMON-RED', imageId: 3001, faction: FACTION.CITIZEN,
-    baseStats: { maxHp: 150, phy: 20, int: 30, agi: 40, atkSpeed: 1.0, atkRange: 70 },
-    atkType: 'ranged', atkPattern: 'orb', growthRate: { maxHp: 12, phy: 2, int: 3, agi: 3 } },
+    mchStats: { hp: 150, phy: 50, int: 80, agi: 90 },
+    atkSpeed: 1.0, atkRange: 70, atkType: 'ranged', atkPattern: 'orb' },
 
   douran:     { id: 'douran', name: 'DOURAN', imageId: 3054, faction: FACTION.CITIZEN,
-    baseStats: { maxHp: 200, phy: 35, int: 25, agi: 35, atkSpeed: 0.9, atkRange: 50 },
-    atkType: 'melee', atkPattern: 'slash', growthRate: { maxHp: 18, phy: 4, int: 2, agi: 3 } },
+    mchStats: { hp: 200, phy: 100, int: 60, agi: 70 },
+    atkSpeed: 0.9, atkRange: 50, atkType: 'melee', atkPattern: 'slash' },
+};
+
+// MCS式エクステンション。武器として機能。
+export const EXTENSIONS = {
+  novice_blade:  { id: 1001, name: 'ノービスブレード', archetype: 'melee',  baseDmg: 14, baseCd: 700,  range: 80,  phyBonus: 8 },
+  novice_katana: { id: 1006, name: 'ノービスカタナ',   archetype: 'melee',  baseDmg: 16, baseCd: 650,  range: 85,  phyBonus: 10 },
+  rapier:        { id: 1028, name: 'レイピア',         archetype: 'melee',  baseDmg: 12, baseCd: 450,  range: 75,  phyBonus: 6, agiBonus: 12 },
+  yumi:          { id: 1013, name: 'ユミ',             archetype: 'ranged', baseDmg: 18, baseCd: 900,  range: 320, phyBonus: 8, agiBonus: 4 },
+  cross_spear:   { id: 1014, name: 'クロススピア',     archetype: 'melee',  baseDmg: 22, baseCd: 750,  range: 100, phyBonus: 14 },
+  sensu:         { id: 1032, name: 'センス',           archetype: 'magic',  baseDmg: 24, baseCd: 1100, range: 240, intBonus: 14 },
+  kabuto:        { id: 1018, name: 'カブト',           archetype: 'armor',  baseDmg: 0,  baseCd: 0,    range: 0,   hpBonus: 30 },
+  boots:         { id: 1031, name: 'ブーツ',           archetype: 'armor',  baseDmg: 0,  baseCd: 0,    range: 0,   agiBonus: 15 },
 };
 
 export const ENEMY_TYPES = {
@@ -97,33 +140,33 @@ export const ENEMY_TYPES = {
 
 export const STAGE_WAVES = {
   sekigahara_field: {
+    title: '関ヶ原の戦場',
     bgm: 'pve.mp3',
     fieldSize: 3000,
     // プレイヤーは戦場の南端中央でスタート
     playerStart: { x: 1500, y: 2700 },
-    // 敵将アッティラの位置（北端の本陣）
-    boss: { heroKey: 'attila', x: 1500, y: 300 },
+    // クリア条件: 北端の出口に到達
+    exit: { x: 1500, y: 200, radius: 90 },
     // フィールド上に既に戦っているヒーロー達
     fieldHeroes: [
-      { heroKey: 'mitsunari', x: 1500, y: 2000, encounterRange: 130 },
-      { heroKey: 'kaihime',   x:  700, y: 1600, encounterRange: 130 },
-      { heroKey: 'ranmaru',   x: 2300, y: 1600, encounterRange: 130 },
+      { heroKey: 'mitsunari', x: 1500, y: 2200, encounterRange: 130 },
+      { heroKey: 'kaihime',   x:  800, y: 1700, encounterRange: 130 },
+      { heroKey: 'ranmaru',   x: 2200, y: 1700, encounterRange: 130 },
       { heroKey: 'yukimura',  x: 1500, y: 1100, encounterRange: 130 },
     ],
-    // 各拠点周辺に常時湧く敵の設定（ヒーローと交戦中）
     heroBattleEnemies: ['creeper_s', 'creeper_t', 'elk_s', 'heart_s', 'melissa_s'],
-    // プレイヤー周辺に湧く敵（ランダムスポーン）
     ambientSpawn: {
       enemies: ['creeper_s', 'creeper_t', 'elk_s', 'heart_s', 'melissa_s', 'creeper_g', 'bandit_s'],
       interval: 0.15,
       maxAround: 80,
     },
-    // 敵将本陣の精鋭エネミー
-    bossGuards: ['bandit_t', 'creeper_v', 'melissa_g', 'elk_g', 'bagel_s'],
-    bossGuardInterval: 0.2,
-    xpTable: [0, 30, 80, 150, 250, 400, 600, 850, 1200, 1600, 2100, 2700, 3500],
   },
 };
+
+// MCS式: XP_TO_NEXT_INITIAL × XP_TO_NEXT_GROWTH^(level-1)
+export function xpToNextLevel(level) {
+  return Math.ceil(MCS.XP_TO_NEXT_INITIAL * Math.pow(MCS.XP_TO_NEXT_GROWTH, Math.max(0, level - 1)));
+}
 
 export const LEVELUP_CHOICES = [
   { id: 'atk_up',      name: '攻撃力強化',   desc: 'PHY +15%', stat: 'phy', mul: 0.15 },
@@ -145,6 +188,7 @@ export const DIALOGUES = {
     { speaker: '', text: '痛っ・・・　ここは・・・戦場？' },
     { speaker: '', text: '（足元にカタナが落ちている）' },
     { speaker: '', text: 'ノービスカタナを手に入れた！' },
+    { speaker: '', text: '（北に進んで、戦場から脱出するんだ——）' },
   ],
   encounter_mitsunari: [
     { speaker: '？？？', text: '——援軍はまだか・・・！' },
@@ -153,8 +197,8 @@ export const DIALOGUES = {
     { speaker: '？？？', text: '・・・？　お主、我の言葉がわかるのか？', portrait: 'mitsunari' },
     { speaker: '石田三成', text: '我は石田三成。\nこの混乱の中で意思を通わせる者がいるとは・・・！', portrait: 'mitsunari' },
     { speaker: '石田三成', text: 'ここはクリプトワールド——\n現実とは異なる、歪んだもう一つの世界。', portrait: 'mitsunari' },
-    { speaker: '石田三成', text: '北の本陣に「アッティラ」と名乗る侵略者がいる。\n奴を討たねば、この戦は終わらぬ。', portrait: 'mitsunari' },
-    { speaker: '石田三成', text: 'だが一人では届かぬ。\nまずは他の戦士たちを集めるのだ。共に行こう！', portrait: 'mitsunari' },
+    { speaker: '石田三成', text: '北に戦場を抜ける道がある。\nまずはそこから脱出するのだ。', portrait: 'mitsunari' },
+    { speaker: '石田三成', text: '他にも孤立して戦っている者がいる。\n声を掛けて共に進もう！', portrait: 'mitsunari' },
     { speaker: '', text: '石田三成が仲間になった！' },
   ],
   encounter_kaihime: [
@@ -175,19 +219,15 @@ export const DIALOGUES = {
     { speaker: '？？？', text: 'ハァッ・・・ハァッ・・・！\nまだ・・・倒れぬぞ・・・！' },
     { speaker: '？？？', text: 'お主・・・！　言葉が通じるか・・・！？', portrait: 'yukimura' },
     { speaker: '真田幸村', text: '日本一の兵、真田幸村！\n孤軍奮闘していたが、もはや限界よ。', portrait: 'yukimura' },
-    { speaker: '真田幸村', text: 'お主のような者が現れるとは・・・運命か。\n敵将アッティラまで、共に駆けようぞ！', portrait: 'yukimura' },
+    { speaker: '真田幸村', text: 'お主のような者が現れるとは・・・運命か。\n出口まで、共に駆けようぞ！', portrait: 'yukimura' },
     { speaker: '', text: '真田幸村が仲間になった！' },
   ],
-  attila_approach: [
-    { speaker: '石田三成', text: 'あれが・・・敵将アッティラ。\n奴を討てば、この戦は終わる。', portrait: 'mitsunari' },
-    { speaker: '甲斐姫', text: 'みんなで力を合わせれば、必ず勝てる！', portrait: 'kaihime' },
-    { speaker: '', text: '（バラバラだった英雄たちが、\nあなたを中心に一つになった——）' },
-  ],
-  battle_victory: [
-    { speaker: '', text: '・・・敵将アッティラ、討ち取った！' },
-    { speaker: '石田三成', text: 'やったぞ・・・！\nお主のおかげだ。', portrait: 'mitsunari' },
-    { speaker: '甲斐姫', text: 'みんなの言葉が通じあう・・・\nこんな戦い方ができるなんて思いもしなかった！', portrait: 'kaihime' },
-    { speaker: '真田幸村', text: 'お主こそ、この世界に必要な存在だ。', portrait: 'yukimura' },
+  reach_exit: [
+    { speaker: '', text: '——脱出に成功した！' },
+    { speaker: '石田三成', text: 'よし・・・！　ひとまず安全な場所まで戻ろう。', portrait: 'mitsunari' },
+    { speaker: '甲斐姫', text: 'みんなの言葉が通じあう不思議な力・・・\nあなたがいてくれて良かった。', portrait: 'kaihime' },
+    { speaker: '石田三成', text: 'だがこの戦は終わっていない。\n「アッティラ」と名乗る侵略者の本陣はまだ北にある。', portrait: 'mitsunari' },
+    { speaker: '真田幸村', text: '力を蓄え、また戻ってこよう。\nお主と共にならば、必ず討てる。', portrait: 'yukimura' },
     { speaker: '', text: '（クリプトワールドの戦いは、まだ始まったばかり——）' },
   ],
 };
