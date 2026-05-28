@@ -33,6 +33,14 @@
 .wm-res--sold { color: var(--damage); border-color: rgba(231,96,96,0.3); }
 .wm-res--turn { color: var(--accent); }
 
+.wm-hint {
+  font-size: 0.75rem; color: var(--accent);
+  text-align: center; padding: 0.3rem 0.6rem;
+  background: rgba(196,163,90,0.1); border-radius: 999px;
+  border: 1px dashed rgba(196,163,90,0.4);
+  max-width: 90%; margin: 0 auto;
+}
+
 .wm-field {
   flex: 1; position: relative; overflow: hidden;
   background:

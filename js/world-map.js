@@ -31,6 +31,7 @@ export class WorldMap {
   _render() {
     const res = partyState.resources;
     const turn = partyState.turn;
+    const hint = this._getProgressHint();
     this.layer.innerHTML = `
       <div class="wm-header">
         <div class="wm-title">${WORLD_MAP.name}</div>
@@ -41,6 +42,7 @@ export class WorldMap {
           <span class="wm-res wm-res--sold">⚔ ${res.soldiers}</span>
           <span class="wm-res wm-res--turn">第${turn}週</span>
         </div>
+        <div class="wm-hint">${hint}</div>
       </div>
       <div class="wm-field" id="wmField">
         <svg id="wmSvg" class="wm-svg"></svg>
@@ -123,6 +125,19 @@ export class WorldMap {
 
       nodesEl.appendChild(el);
     });
+  }
+
+  _getProgressHint() {
+    const conquered = WORLD_MAP.territories.filter(t => partyState.isTerritoryConquered(t.id)).length;
+    const total = WORLD_MAP.territories.length;
+    if (partyState.isTerritoryConquered('attila_castle')) return '🎉 ワールド1制覇完了！';
+    if (this._isAccessible('attila_castle')) return '👑 ついにアッティラ討伐の時！本陣を攻略せよ';
+    const recruitAvail = WORLD_MAP.territories.find(t =>
+      t.recruit && !partyState.hasHero(t.recruit) && this._isAccessible(t.id) && !partyState.isTerritoryConquered(t.id)
+    );
+    if (recruitAvail) return `🤝 ${recruitAvail.name}で${HEROES[recruitAvail.recruit].name}を仲間にできる`;
+    if (partyState.members.length < 4) return '⚔ 仲間を増やし、本拠地で内政も忘れずに';
+    return `📜 進行: ${conquered}/${total}領地制圧`;
   }
 
   _isAccessible(terrId) {
