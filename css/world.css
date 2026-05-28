@@ -460,6 +460,85 @@
 .event-modal--good .event-effect { color: var(--genbu); }
 .event-modal--bad .event-effect { color: var(--damage); }
 
+/* ---------- Squad markers on map ---------- */
+.wm-squads { position: absolute; inset: 0; pointer-events: none; }
+.wm-squad {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid var(--accent); background: var(--panel);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: auto; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  transition: transform 0.2s;
+}
+.wm-squad:hover { transform: translate(-50%, -50%) scale(1.1); }
+.wm-squad img { width: 28px; height: 28px; border-radius: 50%; image-rendering: pixelated; }
+.wm-squad--player { border-color: var(--byakko); box-shadow: 0 0 10px rgba(255,215,0,0.5); }
+.wm-squad--traveling {
+  border-color: var(--seiryu);
+  animation: squad-pulse 1.2s ease-in-out infinite;
+}
+@keyframes squad-pulse {
+  0%,100% { box-shadow: 0 0 6px rgba(86,204,242,0.3); }
+  50%     { box-shadow: 0 0 16px rgba(86,204,242,0.7); }
+}
+.wm-squad__days {
+  position: absolute; bottom: -8px; right: -8px;
+  background: var(--seiryu); color: #1a1420;
+  font-size: 0.6rem; font-weight: 900;
+  padding: 0.05rem 0.3rem; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.6);
+}
+
+.wm-next-btn {
+  font-size: 0.85rem; padding: 0.5rem 1rem;
+}
+
+.auto-spinner {
+  font-size: 2rem; text-align: center; margin: 0.8rem 0;
+  animation: spinner 1s linear infinite;
+}
+@keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ---------- Squad management (home base) ---------- */
+.squad-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.squad-card {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 0.6rem;
+}
+.squad-card__head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.4rem;
+}
+.squad-card__title { font-weight: 800; color: var(--accent); }
+.squad-card__remove { font-size: 0.7rem; }
+.squad-card__heroes { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.squad-hero {
+  display: flex; align-items: center; gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 999px; cursor: pointer;
+  color: var(--text); font-family: inherit; font-size: 0.78rem;
+  transition: border-color 0.15s;
+}
+.squad-hero:hover { border-color: var(--accent); }
+.squad-hero img {
+  width: 28px; height: 28px; border-radius: 50%;
+  image-rendering: pixelated;
+}
+.squad-empty-slot {
+  padding: 0.25rem 0.7rem;
+  background: rgba(0,0,0,0.2); border: 1.5px dashed var(--border);
+  border-radius: 999px; color: var(--muted);
+  font-size: 0.7rem;
+}
+.squad-unassigned {
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+  padding: 0.5rem; background: var(--panel-2);
+  border-radius: var(--radius-md); min-height: 50px;
+}
+.squad-hero--unassigned { background: var(--panel); border-color: var(--accent); }
+
 /* ---------- Toast ---------- */
 .hb-toast {
   position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);

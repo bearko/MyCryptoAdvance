@@ -99,6 +99,20 @@ export const HEROES = {
     atkSpeed: 0.9, atkRange: 50, atkType: 'melee', atkPattern: 'slash' },
 };
 
+// 拠点間移動の所要日数。隣接領地の距離に応じて算出
+export function getTravelDays(fromId, toId, worldMap) {
+  if (!worldMap) return 5;
+  const a = worldMap.territories.find(t => t.id === fromId);
+  const b = worldMap.territories.find(t => t.id === toId);
+  if (!a || !b) return 5;
+  const dx = a.x - b.x, dy = a.y - b.y;
+  const norm = Math.sqrt(dx * dx + dy * dy);
+  // 領地マップ全体は100ユニットなので、対角線で約140
+  // 1領地隣接=20-30→ 3-5日。遠距離=70+→ 10日くらい
+  const days = Math.max(2, Math.min(10, Math.round(norm / 7)));
+  return days;
+}
+
 // 領地難易度→基礎ステータス倍率（フェーズ倍率に乗算）
 export const DIFFICULTY_MUL = {
   1: 0.85, // 中山道, 木曽 等の入門

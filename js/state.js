@@ -15,30 +15,186 @@ class PartyState {
     this.resources = { gold: 0, food: 200, materials: 50, soldiers: 100 };
     // 領地: { id, owner: 'player'|'enemy'|'neutral', conquered: bool }
     this.territories = {};
-    // ターン (内政1回 = 1週)
+    // ターン (週)
     this.turn = 1;
-    // 出陣編成: 戦闘時に連れていく仲間
-    this.deploy = []; // [heroKey, heroKey, ...] (player除く)
+    // カレンダー（日単位）
+    this.day = 1; // 累積日数
+    // 編成: 1-3名のヒーローで構成
+    // [{ id, heroes:[heroKey...], location:terrId, destination:terrId|null, daysRemaining:0, status:'idle'|'traveling'|'arrived' }]
+    this.squads = [];
+    this.nextSquadId = 1;
     // 装備: { heroKey: extKey }
     this.equipment = { player: 'novice_katana' };
     // 進捗ログ
     this.log = [];
-    // 待機（次回戦闘の準備度合い）
+    // 政務割り当て
     this.taskAssignments = {}; // { heroKey: 'shi'|'nou'|'sho'|'kou' }
-    // 施設レベル: 各施設のレベル（次回ターン時に効果適用）
+    // 施設レベル
     this.facilities = { dojo: 0, market: 0, farm: 0, smith: 0 };
-    // 最後のターンイベント（リザルト表示用）
+    // 最後のターンイベント
     this.lastEvent = null;
+    // 到着待ち（伝令キュー）
+    this.arrivalQueue = []; // [{ squadId, terrId }]
   }
 
   addHero(heroKey) {
     if (!this.members.find(m => m.heroKey === heroKey)) {
       this.members.push({ heroKey, level: 1, xp: 0 });
-      // 新規仲間は自動で出陣編成に組み込む（5枠まで、playerは除外）
-      if (heroKey !== 'player' && this.deploy.length < 5 && !this.deploy.includes(heroKey)) {
-        this.deploy.push(heroKey);
+      // 新規仲間は自動で空きのある編成に追加（3名上限）
+      this._autoAssignToSquad(heroKey);
+    }
+  }
+
+  _autoAssignToSquad(heroKey) {
+    // 既にどこかの編成に居る
+    if (this.squads.some(s => s.heroes.includes(heroKey))) return;
+    // 編成が無ければ作成
+    if (this.squads.length === 0) {
+      this.squads.push({
+        id: this._nextSquadId(),
+        heroes: [heroKey],
+        location: 'home_camp',
+        destination: null,
+        daysRemaining: 0,
+        status: 'idle',
+      });
+      return;
+    }
+    // 1) playerが居る編成を最優先で合流（地理的に出会った相手）
+    const playerSquad = this.getPlayerSquad();
+    if (playerSquad && playerSquad.heroes.length < 3 && playerSquad.status === 'idle') {
+      playerSquad.heroes.push(heroKey);
+      return;
+    }
+    // 2) 同じ場所(playerSquadのlocation)の空き編成
+    const playerLoc = playerSquad ? playerSquad.location : 'home_camp';
+    const target = this.squads.find(s => s.heroes.length < 3 && s.status === 'idle' && s.location === playerLoc);
+    if (target) {
+      target.heroes.push(heroKey);
+      return;
+    }
+    // 3) 新編成（playerSquadと同じ場所、なければhome_camp）
+    this.squads.push({
+      id: this._nextSquadId(),
+      heroes: [heroKey],
+      location: playerLoc,
+      destination: null,
+      daysRemaining: 0,
+      status: 'idle',
+    });
+  }
+
+  // 編成の場所を更新（戦闘勝利後等）
+  moveSquadTo(squadId, terrId) {
+    const s = this.getSquad(squadId);
+    if (s) {
+      s.location = terrId;
+      s.destination = null;
+      s.daysRemaining = 0;
+      s.status = 'idle';
+    }
+  }
+
+  _nextSquadId() {
+    return `squad_${this.nextSquadId++}`;
+  }
+
+  // 編成系ヘルパー
+  getSquad(squadId) { return this.squads.find(s => s.id === squadId); }
+  getPlayerSquad() { return this.squads.find(s => s.heroes.includes('player')); }
+  getSquadsAt(terrId) { return this.squads.filter(s => s.location === terrId && s.status !== 'traveling'); }
+  getTravelingSquads() { return this.squads.filter(s => s.status === 'traveling'); }
+  getSquadsTargeting(terrId) { return this.squads.filter(s => s.destination === terrId); }
+
+  moveHeroToSquad(heroKey, squadId) {
+    // 旅行中編成は触れない
+    const cur = this.squads.find(s => s.heroes.includes(heroKey));
+    const dst = this.squads.find(s => s.id === squadId);
+    if (!cur || !dst || cur === dst) return false;
+    if (cur.status === 'traveling' || dst.status === 'traveling') return false;
+    if (dst.heroes.length >= 3) return false;
+    // 同じ拠点にいないと移動不可
+    if (cur.location !== dst.location) return false;
+    cur.heroes = cur.heroes.filter(h => h !== heroKey);
+    dst.heroes.push(heroKey);
+    // 空編成は削除（player編成は残す）
+    if (cur.heroes.length === 0 && !cur.heroes.includes('player')) {
+      this.squads = this.squads.filter(s => s.id !== cur.id);
+    }
+    return true;
+  }
+
+  createSquadAt(location) {
+    const s = {
+      id: this._nextSquadId(),
+      heroes: [],
+      location,
+      destination: null,
+      daysRemaining: 0,
+      status: 'idle',
+    };
+    this.squads.push(s);
+    return s;
+  }
+
+  removeSquad(squadId) {
+    const s = this.getSquad(squadId);
+    if (!s) return;
+    // 兵を解散して他の編成に吸収
+    for (const h of s.heroes) {
+      this._autoAssignToSquadExcluding(h, squadId);
+    }
+    this.squads = this.squads.filter(x => x.id !== squadId);
+  }
+
+  _autoAssignToSquadExcluding(heroKey, excludeId) {
+    const target = this.squads.find(s => s.id !== excludeId && s.heroes.length < 3 && s.status === 'idle');
+    if (target) target.heroes.push(heroKey);
+  }
+
+  dispatchSquad(squadId, destinationTerrId, days) {
+    const s = this.getSquad(squadId);
+    if (!s || s.status === 'traveling' || s.heroes.length === 0) return false;
+    s.destination = destinationTerrId;
+    s.daysRemaining = days;
+    s.status = 'traveling';
+    return true;
+  }
+
+  // 1日進める
+  tickDay() {
+    this.day++;
+    // 旅行中編成を進める
+    for (const s of this.squads) {
+      if (s.status !== 'traveling') continue;
+      s.daysRemaining--;
+      if (s.daysRemaining <= 0) {
+        s.location = s.destination;
+        s.destination = null;
+        s.daysRemaining = 0;
+        s.status = 'arrived';
+        this.arrivalQueue.push({ squadId: s.id, terrId: s.location });
       }
     }
+  }
+
+  // 7日進める = 1週進める
+  advanceWeek() {
+    for (let i = 0; i < 7; i++) this.tickDay();
+  }
+
+  // 派遣後、編成が制圧成功した場合の状態更新
+  setSquadIdle(squadId) {
+    const s = this.getSquad(squadId);
+    if (s) s.status = 'idle';
+  }
+
+  // 編成全員のレベル平均
+  getSquadAvgLevel(squadId) {
+    const s = this.getSquad(squadId);
+    if (!s || s.heroes.length === 0) return 1;
+    const sum = s.heroes.reduce((acc, h) => acc + this.getHeroLevel(h), 0);
+    return sum / s.heroes.length;
   }
 
   removeHero(heroKey) {
@@ -254,15 +410,6 @@ class PartyState {
   }
 
   // 出陣編成
-  toggleDeploy(heroKey) {
-    const i = this.deploy.indexOf(heroKey);
-    if (i >= 0) this.deploy.splice(i, 1);
-    else if (this.deploy.length < 5) this.deploy.push(heroKey);
-  }
-
-  getDeployedHeroes() {
-    return this.deploy.filter(k => this.hasHero(k));
-  }
 }
 
 export const partyState = new PartyState();
