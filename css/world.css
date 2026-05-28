@@ -467,6 +467,33 @@
   100% { opacity: 0; transform: translate(-50%, -10px); }
 }
 
+/* ---------- Battle Rank ---------- */
+.result__rank {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.4rem 0.9rem; background: var(--panel-2);
+  border-radius: 999px; border: 1.5px solid var(--accent);
+  animation: rankPop 0.5s ease;
+}
+@keyframes rankPop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.rank-label { font-size: 0.75rem; color: var(--muted); }
+.rank-value {
+  font-size: 1.6rem; font-weight: 900;
+  letter-spacing: 0.05em; text-shadow: 0 0 16px currentColor;
+}
+.rank-D { color: #888; }
+.rank-C { color: #aabbcc; }
+.rank-B { color: var(--seiryu); }
+.rank-A { color: var(--genbu); }
+.rank-S { color: var(--byakko); }
+.rank-Sp { color: var(--byakko); text-shadow: 0 0 20px var(--byakko); }
+.rank-SS { color: #ff8844; text-shadow: 0 0 20px #ff8844; }
+.rank-SSS { color: #ff44dd; text-shadow: 0 0 24px #ff44dd; }
+.rank-mul { font-size: 0.75rem; color: var(--accent); font-weight: 700; }
+
 /* ---------- Result Layer (used in main.js) ---------- */
 .result-layer {
   position: fixed; inset: 0; z-index: 85;

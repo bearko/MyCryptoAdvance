@@ -58,7 +58,13 @@ export class GameEngine {
     this.onDefeat = null;
 
     this._resize();
-    window.addEventListener('resize', () => this._resize());
+    this._onResize = () => this._resize();
+    window.addEventListener('resize', this._onResize);
+  }
+
+  destroy() {
+    this.stop();
+    if (this._onResize) window.removeEventListener('resize', this._onResize);
   }
 
   _resize() {
@@ -86,6 +92,8 @@ export class GameEngine {
     this.fieldSize = stage.fieldSize || 2000;
     this.laneWidth = 0;
     this.exit = stage.exit || null;
+    this.finalBossKey = stage.finalBoss || null;
+    this.finalBossDefeated = !this.finalBossKey;
     this.stageTime = 0;
     this.ambientTimer = 0;
     this.kills = 0;
@@ -124,6 +132,31 @@ export class GameEngine {
       }
     }
 
+    // 最終ボス: 出口手前に巨大な敵として配置
+    if (this.finalBossKey) {
+      const bossDef = this.heroDefMap[this.finalBossKey];
+      if (bossDef && this.exit) {
+        const m = bossDef.mchStats || { hp: 600, phy: 200, int: 100, agi: 80 };
+        this.bossUnit = {
+          id: 'final_boss',
+          name: bossDef.name,
+          imageId: bossDef.imageId,
+          x: this.exit.x,
+          y: this.exit.y + 80,
+          radius: 36,
+          hp: m.hp * 2.5, maxHp: m.hp * 2.5,
+          phy: m.phy * 1.3,
+          speed: 40,
+          xpValue: 0, // ボスはXP配布の対象外
+          alive: true, flash: 0,
+          spriteKey: `hero_${bossDef.imageId}`,
+          scale: 2.5,
+          isFinalBoss: true,
+        };
+        this.enemies.push(this.bossUnit);
+        this.totalEnemies++;
+      }
+    }
   }
 
   _createUnit(def, x, y, isAlly) {
@@ -212,6 +245,8 @@ export class GameEngine {
 
   _checkExit() {
     if (!this.exit || this.reachedExit) return;
+    // 最終ボスが残っている場合は出口に到達できない
+    if (!this.finalBossDefeated) return;
     const dx = this.player.x - this.exit.x;
     const dy = this.player.y - this.exit.y;
     if (dx * dx + dy * dy < this.exit.radius * this.exit.radius) {
@@ -607,14 +642,28 @@ export class GameEngine {
       this.combo++;
       this.comboTimer = 2.0;
       if (this.combo > this.maxCombo) this.maxCombo = this.combo;
-      const burstCount = this.particles.length < 200 ? (enemy.isBoss ? 6 : 2) : 0;
+      if (enemy.isFinalBoss) {
+        this.finalBossDefeated = true;
+        this.screenShake = 1.2;
+        // 派手な撃破演出
+        for (let i = 0; i < 30; i++) {
+          this.particles.push({
+            x: enemy.x, y: enemy.y, type: 'burst',
+            timer: 0.5 + Math.random() * 0.6,
+            vx: (Math.random() - 0.5) * 280,
+            vy: (Math.random() - 0.5) * 280,
+            color: '#ffd700',
+          });
+        }
+      }
+      const burstCount = this.particles.length < 200 ? ((enemy.isBoss || enemy.isFinalBoss) ? 6 : 2) : 0;
       for (let i = 0; i < burstCount; i++) {
         this.particles.push({
           x: enemy.x, y: enemy.y, type: 'burst',
           timer: 0.3 + Math.random() * 0.2,
           vx: (Math.random() - 0.5) * 120,
           vy: (Math.random() - 0.5) * 120,
-          color: enemy.isBoss ? '#ffd700' : '#ff8844',
+          color: (enemy.isBoss || enemy.isFinalBoss) ? '#ffd700' : '#ff8844',
         });
       }
     }
@@ -857,8 +906,21 @@ export class GameEngine {
       ctx.restore();
     }
 
-    // 出口（金の星）
-    if (this.exit) {
+    // 最終ボス（赤い大星）
+    if (this.bossUnit && this.bossUnit.alive) {
+      const bx = toMapX(this.bossUnit.x), by = toMapY(this.bossUnit.y);
+      const bpulse = 1 + Math.sin(performance.now() / 150) * 0.4;
+      ctx.fillStyle = '#ff3030';
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + i * (PI2 / 5);
+        const r = i % 2 === 0 ? 8 * bpulse : 4 * bpulse;
+        const px = bx + Math.cos(a) * r, py = by + Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+    } else if (this.exit) {
+      // 出口（金の星）はボス撃破後に表示
       const ex = toMapX(this.exit.x), ey = toMapY(this.exit.y);
       const epulse = 1 + Math.sin(performance.now() / 200) * 0.3;
       ctx.fillStyle = '#ffd700';
@@ -954,7 +1016,8 @@ export class GameEngine {
       const sx = e.x - cam.x, sy = e.y - cam.y;
       if (sx < -sz || sx > this.vw + sz || sy < -sz || sy > this.vh + sz) continue;
 
-      if (many && !e.isBoss) {
+      const importantUnit = e.isBoss || e.isFinalBoss;
+      if (many && !importantUnit) {
         const sprite = this.sprites[e.spriteKey];
         if (e.flash > 0) {
           ctx.save(); ctx.globalAlpha = 0.6; ctx.filter = `brightness(${1 + e.flash * 3})`;
@@ -968,7 +1031,19 @@ export class GameEngine {
         if (e.flash > 0) ctx.restore();
       } else {
         this._drawSprite(ctx, cam, e, sz);
-        if (e.isBoss) this._drawHpBar(ctx, cam, e, sz);
+        if (importantUnit) {
+          this._drawHpBar(ctx, cam, e, sz);
+          if (e.isFinalBoss) {
+            ctx.save();
+            ctx.fillStyle = '#ff3030';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.9)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(`▼ ${e.name}`, sx, sy - sz / 2 - 16);
+            ctx.restore();
+          }
+        }
       }
     }
   }
