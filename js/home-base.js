@@ -2,7 +2,7 @@
    home-base.js — 本拠地: 内政・募集・武具
    ============================================================ */
 
-import { HEROES, EXTENSIONS, ASSETS, RECRUIT_POOL, SHOP_EXTENSIONS } from './constants.js';
+import { HEROES, EXTENSIONS, ASSETS, RECRUIT_POOL, SHOP_EXTENSIONS, FACILITIES, TRAINING_TIERS } from './constants.js';
 import { partyState } from './state.js';
 import { calcAttrs, calcProduction, ATTR_LABEL } from './factory-attrs.js';
 import { audio } from './audio.js';
@@ -43,6 +43,8 @@ export class HomeBase {
       </div>
       <div class="hb-tabs">
         <button class="hb-tab ${this.tab==='govern'?'hb-tab--active':''}" data-tab="govern">政務</button>
+        <button class="hb-tab ${this.tab==='dojo'?'hb-tab--active':''}" data-tab="dojo">道場</button>
+        <button class="hb-tab ${this.tab==='facility'?'hb-tab--active':''}" data-tab="facility">施設</button>
         <button class="hb-tab ${this.tab==='recruit'?'hb-tab--active':''}" data-tab="recruit">募集</button>
         <button class="hb-tab ${this.tab==='shop'?'hb-tab--active':''}" data-tab="shop">武具</button>
         <button class="hb-tab ${this.tab==='roster'?'hb-tab--active':''}" data-tab="roster">家臣</button>
@@ -68,6 +70,8 @@ export class HomeBase {
   _renderTab() {
     const body = $('hbBody');
     if (this.tab === 'govern') this._renderGovern(body);
+    else if (this.tab === 'dojo') this._renderDojo(body);
+    else if (this.tab === 'facility') this._renderFacility(body);
     else if (this.tab === 'recruit') this._renderRecruit(body);
     else if (this.tab === 'shop') this._renderShop(body);
     else if (this.tab === 'roster') this._renderRoster(body);
@@ -157,8 +161,41 @@ export class HomeBase {
   _advanceTurn() {
     audio.playSe('confirm');
     const prod = this._calcProductionPreview();
-    partyState.advanceTurn(prod);
+    const result = partyState.advanceTurn(prod);
     this._render();
+    if (result.event) {
+      this._showEventModal(result.event);
+    } else if (result.starvation > 0) {
+      this._showToast(`兵糧不足！ 兵士-${result.starvation}`);
+    }
+  }
+
+  _showEventModal(event) {
+    const modal = document.createElement('div');
+    modal.className = 'wm-modal-bg';
+    const e = event.effect;
+    const effectParts = [];
+    if (e.gold) effectParts.push(`💰 ${e.gold > 0 ? '+' : ''}${e.gold}`);
+    if (e.food) effectParts.push(`🌾 ${e.food > 0 ? '+' : ''}${e.food}`);
+    if (e.materials) effectParts.push(`⚒ ${e.materials > 0 ? '+' : ''}${e.materials}`);
+    if (e.soldiers) effectParts.push(`⚔ ${e.soldiers > 0 ? '+' : ''}${e.soldiers}`);
+    const isBad = (e.gold || 0) < 0 || (e.food || 0) < 0 || (e.soldiers || 0) < 0;
+    modal.innerHTML = `
+      <div class="wm-modal event-modal ${isBad ? 'event-modal--bad' : 'event-modal--good'}">
+        <h3 class="wm-modal__title">${event.name}</h3>
+        <div class="wm-modal__desc">${event.desc}</div>
+        <div class="event-effect">${effectParts.join('　')}</div>
+        <div class="wm-modal__actions">
+          <button class="btn" id="eventClose">OK</button>
+        </div>
+      </div>
+    `;
+    this.layer.appendChild(modal);
+    audio.playSe(isBad ? 'defeat' : 'item');
+    modal.querySelector('#eventClose').addEventListener('click', () => {
+      audio.playSe('confirm');
+      modal.remove();
+    });
   }
 
   _renderRecruit(body) {
@@ -245,18 +282,18 @@ export class HomeBase {
       btn.addEventListener('click', () => {
         const extKey = btn.dataset.ext;
         const cost = parseInt(btn.dataset.cost);
-        if (partyState.spendGold(cost)) {
-          // 装備対象を選ぶ
-          this._showEquipModal(extKey);
-        } else {
+        if (partyState.resources.gold < cost) {
           audio.playSe('defeat');
           this._showToast('金が足りません');
+          return;
         }
+        // 装備対象選択 → 確定時に金を引く
+        this._showEquipModal(extKey, cost);
       });
     });
   }
 
-  _showEquipModal(extKey) {
+  _showEquipModal(extKey, cost) {
     const ext = EXTENSIONS[extKey];
     const modal = document.createElement('div');
     modal.className = 'wm-modal-bg';
@@ -272,7 +309,8 @@ export class HomeBase {
     }).join('');
     modal.innerHTML = `
       <div class="wm-modal">
-        <h3 class="wm-modal__title">${ext.name} を装備する家臣</h3>
+        <h3 class="wm-modal__title">${ext.name} (💰${cost}G)</h3>
+        <div class="wm-modal__desc">装備する家臣を選択（既存装備は上書き）</div>
         <div class="equip-list">${list}</div>
         <div class="wm-modal__actions">
           <button class="btn btn--secondary" id="equipCancel">キャンセル</button>
@@ -283,20 +321,138 @@ export class HomeBase {
     modal.querySelectorAll('.equip-target').forEach(b => {
       b.addEventListener('click', () => {
         const hk = b.dataset.hero;
-        partyState.equipment[hk] = extKey;
-        audio.playSe('item');
-        modal.remove();
-        this._render();
-        this._showToast(`${HEROES[hk].name}に装備しました`);
+        if (partyState.spendGold(cost)) {
+          partyState.equipment[hk] = extKey;
+          audio.playSe('item');
+          modal.remove();
+          this._render();
+          this._showToast(`${HEROES[hk].name}に${ext.name}を装備`);
+        }
       });
     });
     modal.querySelector('#equipCancel').addEventListener('click', () => {
-      // 返金（キャンセル時）
-      const cost = SHOP_EXTENSIONS.find(s => s.extKey === extKey).cost;
-      partyState.resources.gold += cost;
       audio.playSe('select');
       modal.remove();
-      this._render();
+    });
+  }
+
+  _renderDojo(body) {
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">道場・特訓</h3>
+        <p class="hb-section-desc">金を支払って家臣に経験値を与え、強化します。</p>
+        <div class="dojo-tiers">
+          ${TRAINING_TIERS.map((t, i) => `
+            <div class="dojo-tier" data-tier="${i}">
+              <div class="dojo-tier__name">${t.name}</div>
+              <div class="dojo-tier__detail">XP +${t.xp} / 💰${t.cost}G</div>
+            </div>
+          `).join('')}
+        </div>
+        <h4 class="hb-subtitle">対象家臣を選択</h4>
+        <div class="dojo-hero-list" id="dojoHeroList"></div>
+      </div>
+    `;
+    let selectedTier = 0;
+    const tiers = body.querySelectorAll('.dojo-tier');
+    const updateTier = () => {
+      tiers.forEach((el, i) => el.classList.toggle('dojo-tier--selected', i === selectedTier));
+    };
+    tiers.forEach((el, i) => {
+      el.addEventListener('click', () => {
+        audio.playSe('select');
+        selectedTier = i;
+        updateTier();
+      });
+    });
+    updateTier();
+
+    const list = $('dojoHeroList');
+    partyState.members.forEach(m => {
+      const def = HEROES[m.heroKey];
+      if (!def) return;
+      const row = document.createElement('button');
+      row.className = 'dojo-row';
+      row.innerHTML = `
+        <img src="${ASSETS.hero(def.imageId)}" draggable="false">
+        <div class="dojo-row__info">
+          <div class="dojo-row__name">${def.name}</div>
+          <div class="dojo-row__lv">Lv.${m.level}　XP ${m.xp}</div>
+        </div>
+        <div class="dojo-row__action">特訓</div>
+      `;
+      row.addEventListener('click', () => {
+        const tier = TRAINING_TIERS[selectedTier];
+        if (!partyState.spendGold(tier.cost)) {
+          audio.playSe('defeat');
+          this._showToast('金が足りません');
+          return;
+        }
+        const r = partyState.trainHero(m.heroKey, tier.xp);
+        audio.playSe('levelup');
+        if (r.levelsGained > 0) {
+          this._showToast(`${def.name}が${r.levelsGained}レベル上昇！`);
+        } else {
+          this._showToast(`${def.name}に経験値 +${tier.xp}`);
+        }
+        this._render();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  _renderFacility(body) {
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">施設建設</h3>
+        <p class="hb-section-desc">本拠地に施設を建設し、毎週の自動生産を強化。</p>
+        <div class="facility-list" id="facilityList"></div>
+      </div>
+    `;
+    const list = $('facilityList');
+    Object.entries(FACILITIES).forEach(([key, fac]) => {
+      const curLv = partyState.facilities[key] || 0;
+      const nextLv = fac.levels[curLv];
+      const maxed = !nextLv;
+      const card = document.createElement('div');
+      card.className = 'facility-card';
+      const costStr = nextLv ?
+        Object.entries(nextLv.cost).map(([k, v]) => `${k === 'gold' ? '💰' : '⚒'}${v}`).join(' ')
+        : '';
+      card.innerHTML = `
+        <div class="facility-card__icon">${fac.icon}</div>
+        <div class="facility-card__info">
+          <div class="facility-card__name">${fac.name} <span class="facility-card__lv">Lv.${curLv}/${fac.levels.length}</span></div>
+          <div class="facility-card__desc">${fac.desc}</div>
+        </div>
+        <div class="facility-card__action">
+          ${maxed
+            ? '<span class="facility-card__maxed">最大</span>'
+            : `<button class="btn btn--small" data-fac="${key}">↑ ${costStr}</button>`}
+        </div>
+      `;
+      list.appendChild(card);
+    });
+    list.querySelectorAll('button[data-fac]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.fac;
+        const curLv = partyState.facilities[key] || 0;
+        const next = FACILITIES[key].levels[curLv];
+        if (!next) return;
+        const gold = next.cost.gold || 0;
+        const mats = next.cost.materials || 0;
+        if (partyState.resources.gold < gold || partyState.resources.materials < mats) {
+          audio.playSe('defeat');
+          this._showToast('資源が足りません');
+          return;
+        }
+        partyState.spendGold(gold);
+        if (mats) partyState.spendMaterials(mats);
+        partyState.facilities[key] = curLv + 1;
+        audio.playSe('item');
+        this._showToast(`${FACILITIES[key].name}を強化: ${next.name}`);
+        this._render();
+      });
     });
   }
 

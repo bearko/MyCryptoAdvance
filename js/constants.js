@@ -307,6 +307,49 @@ export const RECRUIT_POOL = [
   { heroKey: 'etheremon',  cost: 400 },
 ];
 
+// 施設定義: 本拠地パッシブ強化
+export const FACILITIES = {
+  dojo: {
+    name: '道場', icon: '⚔', desc: '兵士の自動生産+施設レベル×3/週',
+    levels: [
+      { cost: { gold: 200 }, name: 'Lv1 稽古場' },
+      { cost: { gold: 500, materials: 30 }, name: 'Lv2 道場' },
+      { cost: { gold: 1200, materials: 80 }, name: 'Lv3 武芸場' },
+    ],
+  },
+  market: {
+    name: '市場', icon: '💰', desc: '金の自動生産+施設レベル×5/週',
+    levels: [
+      { cost: { gold: 200 }, name: 'Lv1 露店' },
+      { cost: { gold: 500, materials: 20 }, name: 'Lv2 市場' },
+      { cost: { gold: 1200, materials: 60 }, name: 'Lv3 商業区' },
+    ],
+  },
+  farm: {
+    name: '農場', icon: '🌾', desc: '食料の自動生産+施設レベル×5/週',
+    levels: [
+      { cost: { gold: 150 }, name: 'Lv1 畑' },
+      { cost: { gold: 400, materials: 20 }, name: 'Lv2 農場' },
+      { cost: { gold: 1000, materials: 50 }, name: 'Lv3 大農園' },
+    ],
+  },
+  smith: {
+    name: '工房', icon: '⚒', desc: '素材の自動生産+施設レベル×3/週',
+    levels: [
+      { cost: { gold: 250, materials: 10 }, name: 'Lv1 鍛冶場' },
+      { cost: { gold: 600, materials: 50 }, name: 'Lv2 工房' },
+      { cost: { gold: 1500, materials: 120 }, name: 'Lv3 大工房' },
+    ],
+  },
+};
+
+// 道場特訓: 金を払ってXP付与
+export const TRAINING_TIERS = [
+  { cost: 50, xp: 5, name: '軽い稽古' },
+  { cost: 150, xp: 18, name: '本格修行' },
+  { cost: 400, xp: 60, name: '武芸特訓' },
+];
+
 // エクステンションショップ
 export const SHOP_EXTENSIONS = [
   { extKey: 'novice_blade',  cost: 100 },
