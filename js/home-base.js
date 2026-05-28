@@ -43,11 +43,11 @@ export class HomeBase {
       </div>
       <div class="hb-tabs">
         <button class="hb-tab ${this.tab==='govern'?'hb-tab--active':''}" data-tab="govern">政務</button>
+        <button class="hb-tab ${this.tab==='squads'?'hb-tab--active':''}" data-tab="squads">編成</button>
         <button class="hb-tab ${this.tab==='dojo'?'hb-tab--active':''}" data-tab="dojo">道場</button>
         <button class="hb-tab ${this.tab==='facility'?'hb-tab--active':''}" data-tab="facility">施設</button>
         <button class="hb-tab ${this.tab==='recruit'?'hb-tab--active':''}" data-tab="recruit">募集</button>
         <button class="hb-tab ${this.tab==='shop'?'hb-tab--active':''}" data-tab="shop">武具</button>
-        <button class="hb-tab ${this.tab==='roster'?'hb-tab--active':''}" data-tab="roster">家臣</button>
       </div>
       <div class="hb-body" id="hbBody"></div>
       <div class="hb-footer">
@@ -70,11 +70,116 @@ export class HomeBase {
   _renderTab() {
     const body = $('hbBody');
     if (this.tab === 'govern') this._renderGovern(body);
+    else if (this.tab === 'squads') this._renderSquads(body);
     else if (this.tab === 'dojo') this._renderDojo(body);
     else if (this.tab === 'facility') this._renderFacility(body);
     else if (this.tab === 'recruit') this._renderRecruit(body);
     else if (this.tab === 'shop') this._renderShop(body);
-    else if (this.tab === 'roster') this._renderRoster(body);
+    else this._renderRoster(body);
+  }
+
+  _renderSquads(body) {
+    body.innerHTML = `
+      <div class="hb-section">
+        <h3 class="hb-section-title">部隊編成</h3>
+        <p class="hb-section-desc">1編成あたり1-3名。本拠地に駐留中の編成のみ変更できます。<br>4人以上集まったら新たな編成を作成可能。</p>
+        <div class="squad-list" id="squadList"></div>
+        <button class="btn hb-advance-btn" id="addSquadBtn" style="margin-top:0.6rem">+ 新しい編成を作成</button>
+        <h4 class="hb-subtitle" style="margin-top:1.1rem;">未配属の家臣</h4>
+        <div class="squad-unassigned" id="unassignedList"></div>
+      </div>
+    `;
+    this._renderSquadList();
+    $('addSquadBtn').addEventListener('click', () => {
+      audio.playSe('select');
+      partyState.createSquadAt('home_camp');
+      this._renderSquadList();
+    });
+  }
+
+  _renderSquadList() {
+    const list = $('squadList');
+    list.innerHTML = '';
+    const homeSquads = partyState.squads.filter(s => s.location === 'home_camp' && s.status === 'idle');
+    if (homeSquads.length === 0) {
+      list.innerHTML = '<div class="hb-empty">本拠地に駐留する編成がありません。</div>';
+    }
+    homeSquads.forEach((s, i) => {
+      const card = document.createElement('div');
+      card.className = 'squad-card';
+      const idx = partyState.squads.indexOf(s) + 1;
+      const heroes = s.heroes.map(h => {
+        const def = HEROES[h];
+        return `<button class="squad-hero" data-action="remove" data-squad="${s.id}" data-hero="${h}">
+          <img src="${ASSETS.hero(def.imageId)}" draggable="false">
+          <span>${def.name}</span>
+        </button>`;
+      }).join('');
+      const empty = '<div class="squad-empty-slot">空きスロット</div>'.repeat(3 - s.heroes.length);
+      const removable = !s.heroes.includes('player');
+      card.innerHTML = `
+        <div class="squad-card__head">
+          <span class="squad-card__title">第${idx}部隊 ${s.heroes.includes('player') ? '👑' : ''}</span>
+          ${removable ? `<button class="btn--small squad-card__remove" data-squad="${s.id}">解散</button>` : ''}
+        </div>
+        <div class="squad-card__heroes">${heroes}${empty}</div>
+      `;
+      list.appendChild(card);
+    });
+    // 未配属
+    const assignedSet = new Set(partyState.squads.flatMap(s => s.heroes));
+    const unassigned = partyState.members.filter(m => !assignedSet.has(m.heroKey));
+    const ulist = $('unassignedList');
+    ulist.innerHTML = '';
+    unassigned.forEach(m => {
+      const def = HEROES[m.heroKey];
+      if (!def) return;
+      const row = document.createElement('button');
+      row.className = 'squad-hero squad-hero--unassigned';
+      row.dataset.action = 'assign';
+      row.dataset.hero = m.heroKey;
+      row.innerHTML = `<img src="${ASSETS.hero(def.imageId)}" draggable="false"><span>${def.name}</span>`;
+      ulist.appendChild(row);
+    });
+
+    // クリックハンドラ
+    list.querySelectorAll('.squad-card__remove').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        audio.playSe('select');
+        partyState.removeSquad(btn.dataset.squad);
+        this._renderSquadList();
+      });
+    });
+    list.querySelectorAll('[data-action="remove"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        audio.playSe('select');
+        const hero = btn.dataset.hero;
+        const squad = partyState.getSquad(btn.dataset.squad);
+        if (!squad) return;
+        // playerは外せない
+        if (hero === 'player') {
+          this._showToast('プレイヤーは外せません');
+          return;
+        }
+        squad.heroes = squad.heroes.filter(h => h !== hero);
+        this._renderSquadList();
+      });
+    });
+    ulist.querySelectorAll('[data-action="assign"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        audio.playSe('select');
+        const hero = btn.dataset.hero;
+        // 空きのある編成を探して入れる
+        const target = homeSquads.find(s => s.heroes.length < 3);
+        if (!target) {
+          this._showToast('編成枠が満杯です。新しい編成を作成してください。');
+          return;
+        }
+        target.heroes.push(hero);
+        this._renderSquadList();
+      });
+    });
   }
 
   _renderGovern(body) {

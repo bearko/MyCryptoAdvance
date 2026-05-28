@@ -103,8 +103,8 @@ async function runWorldLoop() {
     if (action.action === 'home') {
       await homeBase.show();
     } else if (action.action === 'attack') {
-      await attackTerritory(action.terr);
-      // 全制覇判定（任意）
+      await attackTerritory(action.terr, action.squadId);
+      // 全制覇判定
       if (partyState.isTerritoryConquered('attila_castle')) {
         await showWorldClear();
         break;
@@ -113,7 +113,7 @@ async function runWorldLoop() {
   }
 }
 
-async function attackTerritory(terr) {
+async function attackTerritory(terr, squadId) {
   await transition('black');
   renderer.clear();
   // ステージ設定: TERRITORY_STAGESにあれば使用、なければ sekigahara_field
@@ -123,7 +123,20 @@ async function attackTerritory(terr) {
   }
   await transition('unblack');
 
-  const result = await runBattleStage({ stageKey: stageDef ? terr.id : 'sekigahara_field', useDeploy: true });
+  // 指定squad + 同拠点に居る連合軍を編成
+  const squad = squadId ? partyState.getSquad(squadId) : partyState.getPlayerSquad();
+  const coalitionSquads = squad ? partyState.getSquadsAt(squad.location).filter(s => s.id !== squad.id) : [];
+  const heroesInBattle = squad
+    ? [...squad.heroes, ...coalitionSquads.flatMap(s => s.heroes)]
+    : ['player'];
+  const result = await runBattleStage({
+    stageKey: stageDef ? terr.id : 'sekigahara_field',
+    deployHeroes: heroesInBattle.filter(h => h !== 'player'),
+  });
+
+  // 戦闘後: 編成を idle に戻す（連合軍含む）
+  if (squad) partyState.setSquadIdle(squad.id);
+  for (const cs of coalitionSquads) partyState.setSquadIdle(cs.id);
 
   if (result.victory) {
     await transition('black');
@@ -132,7 +145,9 @@ async function attackTerritory(terr) {
     renderer.drawGrassland();
     // 制圧処理
     partyState.conquerTerritory(terr.id);
-    // 仲間化
+    // 編成の位置を新領地に更新
+    if (squad) partyState.moveSquadTo(squad.id, terr.id);
+    // 仲間化（プレイヤー編成に合流）
     if (terr.recruit && !partyState.hasHero(terr.recruit)) {
       partyState.addHero(terr.recruit);
     }
@@ -151,12 +166,16 @@ async function attackTerritory(terr) {
     renderer.clear();
     await showStageClearResult({ ...result, terr }, rewards);
   } else {
+    // 敗北時: playerSquadを本拠地に退却
+    if (squad && squad.heroes.includes('player')) {
+      partyState.moveSquadTo(squad.id, 'home_camp');
+    }
     await transition('black'); renderer.clear(); await transition('unblack');
     await showDefeatScreen(result);
   }
 }
 
-async function runBattleStage({ stageKey, useDeploy }) {
+async function runBattleStage({ stageKey, useDeploy, deployHeroes }) {
   $('sceneLayer').classList.add('hidden');
   $('gameCanvas').classList.remove('hidden');
   $('battleHud').classList.remove('hidden');
@@ -189,16 +208,16 @@ async function runBattleStage({ stageKey, useDeploy }) {
   const playerExt = partyState.equipment.player || HEROES.player.startingExtension || 'novice_katana';
   engine.equipExtension(engine.player, playerExt);
 
-  // 出陣編成された仲間を即座に追加（useDeploy=true時）
-  if (useDeploy) {
-    for (const hk of partyState.getDeployedHeroes()) {
-      const def = HEROES[hk];
-      if (!def) continue;
-      engine.addAlly(def);
-      const ally = engine.allies[engine.allies.length - 1];
-      const eqKey = partyState.equipment[hk] || def.startingExtension;
-      if (eqKey && ally) engine.equipExtension(ally, eqKey);
-    }
+  // 編成された仲間を即座に追加
+  const heroesToAdd = deployHeroes || [];
+  for (const hk of heroesToAdd) {
+    if (hk === 'player') continue; // playerはinitStageで既に追加
+    const def = HEROES[hk];
+    if (!def) continue;
+    engine.addAlly(def);
+    const ally = engine.allies[engine.allies.length - 1];
+    const eqKey = partyState.equipment[hk] || def.startingExtension;
+    if (eqKey && ally) engine.equipExtension(ally, eqKey);
   }
 
   audio.playBgm('pve.mp3');
