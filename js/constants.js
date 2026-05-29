@@ -340,9 +340,9 @@ export const PHASE_CONFIG = {
   phases: [
     { num: 1, name: '導入',      tiers: [1],          hpMul: 1.0, dmgMul: 1.0, xpMul: 1.0, color: '#5ecf8a' },
     { num: 2, name: '進攻',      tiers: [1, 2],       hpMul: 1.2, dmgMul: 1.15, xpMul: 1.2, color: '#ffd700' },
-    { num: 3, name: '激戦',      tiers: [2, 3],       hpMul: 1.4, dmgMul: 1.30, xpMul: 1.5, color: '#ff8844' },
-    { num: 4, name: '危機',      tiers: [3, 4],       hpMul: 1.7, dmgMul: 1.50, xpMul: 2.0, color: '#ff4040' },
-    { num: 5, name: '絶望',      tiers: [4, 5],       hpMul: 2.2, dmgMul: 1.80, xpMul: 3.0, color: '#aa0000' },
+    { num: 3, name: '激戦',      tiers: [2, 3],       hpMul: 1.5, dmgMul: 1.35, xpMul: 1.8, color: '#ff8844' },
+    { num: 4, name: '危機',      tiers: [3, 4],       hpMul: 4.0, dmgMul: 3.0,  xpMul: 3.5, color: '#ff4040' },
+    { num: 5, name: '絶望',      tiers: [4, 5],       hpMul: 8.0, dmgMul: 5.0,  xpMul: 6.0, color: '#aa0000' },
   ],
 };
 

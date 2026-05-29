@@ -1016,8 +1016,8 @@ export class GameEngine {
     const mapSize = isMobile ? 96 : 130;
     const margin = 8;
     const mx = this.vw - mapSize - margin;
-    // フェーズストリップ(20-24px) + 警告(14-16px)の下から開始
-    const my = isMobile ? 26 : 30;
+    // フェーズストリップ(20-24px) + 警告(14-16px)=最大40pxの下から開始
+    const my = isMobile ? 42 : 50;
 
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -1348,11 +1348,23 @@ export class GameEngine {
     const elapsedMin = Math.floor(this.stageTime / 60);
     const elapsedSec = Math.floor(this.stageTime % 60);
     this.hud.timer.textContent = `${elapsedMin}:${elapsedSec.toString().padStart(2, '0')}`;
-    this.hud.kills.textContent = `${this.kills} KILLS`;
+    this.hud.kills.textContent = `⚔ ${this.kills}`;
     const totalSpots = (this.stage && this.stage.fieldHeroes) ? this.stage.fieldHeroes.length : 0;
     const recruited = this.fieldHeroes.filter(f => f.recruited).length;
-    this.hud.remaining.textContent = `仲間 ${recruited}/${totalSpots}`;
+    this.hud.remaining.textContent = `仲 ${recruited}/${totalSpots}`;
     this.hud.allies.textContent = `×${this.allies.filter(a => a.alive).length + 1}`;
+
+    // 現時点でクリアした場合の獲得報酬を計算 (見極め用)
+    if (this.hud.rewardXp && this.hud.rewardGold && this.hud.rewardRank) {
+      const rank = partyState.evaluateBattle(this.kills, this.maxCombo, this.stageTime);
+      const mul = rank.mul;
+      const baseXp = Math.floor((30 + this.kills * 0.4) * mul);
+      const xpAward = baseXp + Math.floor((this.bonusXp || 0) * mul * 0.2);
+      const goldAward = Math.floor((40 + this.kills * 0.6) * mul);
+      this.hud.rewardRank.textContent = rank.rank;
+      this.hud.rewardXp.textContent = `EXP +${xpAward}`;
+      this.hud.rewardGold.textContent = `💰 +${goldAward}`;
+    }
   }
 
   getResults() {
