@@ -897,9 +897,6 @@ export class GameEngine {
     const phaseDef = this._getPhaseDef();
     if (!phaseDef) return;
     const isMobile = this.vw < 600;
-    // 中央上部に配置
-    const cx = this.vw / 2;
-    const top = isMobile ? 32 : 36;
     ctx.save();
 
     // フェーズ昇格フラッシュ
@@ -912,56 +909,53 @@ export class GameEngine {
       ctx.globalAlpha = 1;
     }
 
-    // 背景バー
-    const barW = Math.min(this.vw - 40, isMobile ? 240 : 320);
-    const barH = isMobile ? 22 : 26;
-    const barX = cx - barW / 2;
-    const barY = top - barH / 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
-    // フェーズカラー
-    ctx.fillStyle = phaseDef.color + '40';
-    ctx.fillRect(barX, barY, barW, barH);
-    // カウントダウン進捗バー
+    // 画面最上部の全幅ストリップ
+    const barH = isMobile ? 20 : 24;
+    const barY = 0;
+    // 暗い背景
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, barY, this.vw, barH);
+    // フェーズカラー薄い帯
+    ctx.fillStyle = phaseDef.color + '38';
+    ctx.fillRect(0, barY, this.vw, barH);
+    // カウントダウン進捗バー (下端3px)
     const progRatio = 1 - (this.nextPhaseAt / PHASE_CONFIG.durationSec);
     ctx.fillStyle = phaseDef.color;
-    ctx.fillRect(barX, barY + barH - 3, barW * progRatio, 3);
-    // ボーダー
-    ctx.strokeStyle = phaseDef.color;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(barX, barY, barW, barH);
+    ctx.fillRect(0, barY + barH - 2, this.vw * progRatio, 2);
 
-    // テキスト
-    ctx.font = `900 ${isMobile ? 12 : 14}px sans-serif`;
+    // テキスト中央
+    ctx.font = `900 ${isMobile ? 11 : 13}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
     ctx.shadowColor = 'rgba(0,0,0,0.9)';
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = 3;
     const phaseLabel = `PHASE ${this.currentPhase}/${PHASE_CONFIG.total} ${phaseDef.name}`;
     const countdown = this.currentPhase < PHASE_CONFIG.total
       ? `次まで ${Math.ceil(this.nextPhaseAt)}s`
       : '最終局面';
-    ctx.fillText(`${phaseLabel}    ${countdown}`, cx, top);
+    ctx.fillText(`${phaseLabel}  •  ${countdown}`, this.vw / 2, barY + barH / 2);
     ctx.shadowBlur = 0;
 
-    // 次フェーズで解放される敵プレビュー（フェーズが最後でなければ）
+    // 次フェーズで解放される敵プレビュー（残り10秒）。バーの直下に独立した別バーで表示
     if (this.currentPhase < PHASE_CONFIG.total && this.nextPhaseAt < 10) {
       const nextPhaseDef = PHASE_CONFIG.phases[this.currentPhase];
       const newTiers = nextPhaseDef.tiers.filter(t => !phaseDef.tiers.includes(t));
       if (newTiers.length > 0) {
         const newEnemies = Object.entries(ENEMY_TIERS)
           .filter(([_, tier]) => newTiers.includes(tier))
-          .slice(0, 3)
+          .slice(0, isMobile ? 2 : 3)
           .map(([key]) => ENEMY_TYPES[key]?.name)
           .filter(Boolean);
         if (newEnemies.length > 0) {
-          const previewY = top + barH / 2 + 12;
-          ctx.font = `700 ${isMobile ? 10 : 11}px sans-serif`;
+          const warnH = isMobile ? 14 : 16;
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
+          ctx.fillRect(0, barY + barH, this.vw, warnH);
+          ctx.font = `700 ${isMobile ? 9 : 11}px sans-serif`;
           ctx.fillStyle = nextPhaseDef.color;
           ctx.shadowColor = 'rgba(0,0,0,0.9)';
-          ctx.shadowBlur = 3;
-          ctx.fillText(`⚠ 解放間近: ${newEnemies.join(' / ')}`, cx, previewY);
+          ctx.shadowBlur = 2;
+          ctx.fillText(`⚠ 解放間近: ${newEnemies.join(' / ')}`, this.vw / 2, barY + barH + warnH / 2);
           ctx.shadowBlur = 0;
         }
       }
@@ -1019,11 +1013,11 @@ export class GameEngine {
 
   _drawMinimap(ctx) {
     const isMobile = this.vw < 600;
-    const mapSize = isMobile ? 110 : 150;
-    const margin = 12;
+    const mapSize = isMobile ? 96 : 130;
+    const margin = 8;
     const mx = this.vw - mapSize - margin;
-    // 右上配置（HUDのstatsエリアより少し下に余白を取って衝突回避）
-    const my = margin + (isMobile ? 56 : 64);
+    // フェーズストリップ(20-24px) + 警告(14-16px)の下から開始
+    const my = isMobile ? 26 : 30;
 
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
