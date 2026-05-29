@@ -189,6 +189,9 @@ async function runBattleStage({ stageKey, useDeploy, deployHeroes }) {
     level: $('hudLevel'),
     timer: $('hudTimer'), kills: $('hudKills'),
     remaining: $('hudRemaining'), allies: $('hudAllies'),
+    rewardXp: $('hudRewardXp'),
+    rewardGold: $('hudRewardGold'),
+    rewardRank: $('hudRewardRank'),
   };
 
   engine = new GameEngine(gameCanvas, hud);

@@ -529,23 +529,43 @@
   border: 1px solid rgba(0,0,0,0.6); white-space: nowrap;
 }
 
-/* ---------- Dispatch mode toggle ---------- */
-.dispatch-mode {
-  display: flex; gap: 0.6rem; margin: 0.3rem 0; flex-wrap: wrap;
+/* ---------- Dispatch mode buttons (大きい2択) ---------- */
+.dispatch-actions {
+  display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;
 }
-.dispatch-mode label {
-  display: flex; align-items: center; gap: 0.25rem;
-  font-size: 0.74rem; color: var(--text);
-  cursor: pointer; padding: 0.2rem 0.4rem;
-  background: var(--panel); border-radius: 999px;
-  border: 1px solid var(--border);
+.dispatch-mode-btn {
+  flex: 1 1 140px; min-width: 130px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.15rem; padding: 0.55rem 0.5rem;
+  border-radius: var(--radius-md); cursor: pointer;
+  background: var(--panel-2); border: 1.5px solid var(--border);
+  color: var(--text); transition: all 0.15s;
+  font-family: inherit;
 }
-.dispatch-mode input[type="radio"] {
-  accent-color: var(--accent);
+.dispatch-mode-btn:hover { transform: translateY(-1px); }
+.dispatch-mode-btn:active { transform: translateY(0); }
+.dispatch-mode-btn--auto {
+  border-color: var(--seiryu);
+  background: linear-gradient(135deg, rgba(86,204,242,0.18), rgba(86,204,242,0.05));
 }
-.dispatch-confirm {
-  margin-top: 0.4rem; font-size: 0.78rem;
+.dispatch-mode-btn--auto:hover {
+  border-color: var(--seiryu); box-shadow: 0 0 12px rgba(86,204,242,0.3);
 }
+.dispatch-mode-btn--manual {
+  border-color: var(--damage);
+  background: linear-gradient(135deg, rgba(231,96,96,0.18), rgba(231,96,96,0.05));
+}
+.dispatch-mode-btn--manual:hover {
+  border-color: var(--damage); box-shadow: 0 0 12px rgba(231,96,96,0.3);
+}
+.dmb-icon { font-size: 1.25rem; line-height: 1; }
+.dmb-title { font-size: 0.82rem; font-weight: 900; }
+.dmb-sub {
+  font-size: 0.65rem; color: var(--muted);
+  text-align: center; line-height: 1.3;
+}
+.dispatch-mode-btn--auto .dmb-title { color: var(--seiryu); }
+.dispatch-mode-btn--manual .dmb-title { color: var(--damage); }
 
 /* ---------- Toast ---------- */
 .wm-toast-host {

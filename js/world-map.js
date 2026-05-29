@@ -532,24 +532,52 @@ export class WorldMap {
     }
     const recruitInfo = terr.recruit ? `<div class="wm-modal__reward">🤝 仲間化: ${HEROES[terr.recruit].name}</div>` : '';
     const isBoss = terr.isFinalBoss;
+    // 派遣不可時の親切なヒント
+    const noSquadHint = () => {
+      // 隣接領地の名前を全部列挙
+      const adjacent = WORLD_MAP.connections
+        .filter(([a,b]) => a === terr.id || b === terr.id)
+        .map(([a,b]) => a === terr.id ? b : a);
+      const adjNames = adjacent.map(id => {
+        const t = WORLD_MAP.territories.find(x => x.id === id);
+        const ok = partyState.isTerritoryConquered(id);
+        return `${t?.name || id}${ok ? '✓' : '×'}`;
+      }).join(' / ');
+      const squadLocations = partyState.squads
+        .filter(s => s.status === 'idle' && s.heroes.length > 0)
+        .map(s => WORLD_MAP.territories.find(t => t.id === s.location)?.name || s.location);
+      return `<div class="wm-modal__desc deploy-empty">
+        ⚠ 派遣可能な部隊がありません<br>
+        <small>隣接領地: ${adjNames}</small><br>
+        <small>現在の部隊配置: ${squadLocations.join(' / ') || 'なし'}</small><br>
+        <small style="color:var(--accent)">この領地を攻めるには、まず隣接領地に部隊を移動する必要があります</small>
+      </div>`;
+    };
+
     const list = availableSquads.length === 0
-      ? '<div class="wm-modal__desc deploy-empty">派遣可能な部隊がありません。<br>隣接領地に居る idle 編成が必要です。</div>'
+      ? noSquadHint()
       : availableSquads.map(s => {
         const days = getTravelDays(s.location, terr.id, WORLD_MAP);
         const avgLv = partyState.getSquadAvgLevel(s.id).toFixed(1);
         const sucRate = calcSuccessRate([s.id], terr.id, terr.difficulty || 1, 1);
         const heroes = s.heroes.map(h => HEROES[h].name).join(' / ');
         const fromName = WORLD_MAP.territories.find(t => t.id === s.location)?.name || '';
+        const autoBtn = !isBoss ? `<button class="dispatch-mode-btn dispatch-mode-btn--auto" data-sq="${s.id}" data-mode="auto">
+          <span class="dmb-icon">⚙</span>
+          <span class="dmb-title">自動戦闘で出陣</span>
+          <span class="dmb-sub">行軍${days}日 + 戦闘3日 / 成功率${Math.round(sucRate*100)}%</span>
+        </button>` : '';
+        const manualBtn = `<button class="dispatch-mode-btn dispatch-mode-btn--manual" data-sq="${s.id}" data-mode="manual">
+          <span class="dmb-icon">⚔</span>
+          <span class="dmb-title">手動戦闘で出陣</span>
+          <span class="dmb-sub">行軍${days}日 / 到着で自分操作</span>
+        </button>`;
         return `<div class="deploy-row" data-squad="${s.id}">
           <div style="flex:1">
             <div style="font-weight:900">${this._squadName(s)} ${s.heroes.includes('player') ? '👑' : ''}</div>
             <div class="deploy-row__name">${heroes}</div>
-            <div class="deploy-row__lv">${fromName}より ${days}日 / 平均Lv.${avgLv} / 自動成功率${Math.round(sucRate*100)}%</div>
-            <div class="dispatch-mode" data-sq="${s.id}">
-              ${!isBoss ? `<label><input type="radio" name="mode-${s.id}" value="auto" checked> ⚙ 自動戦闘 (3日)</label>` : ''}
-              <label><input type="radio" name="mode-${s.id}" value="manual" ${isBoss ? 'checked' : ''}> ⚔ 手動戦闘</label>
-            </div>
-            <button class="btn btn--small dispatch-confirm" data-sq="${s.id}">この部隊で出陣</button>
+            <div class="deploy-row__lv">${fromName}より 平均Lv.${avgLv}</div>
+            <div class="dispatch-actions">${autoBtn}${manualBtn}</div>
           </div>
         </div>`;
       }).join('');
@@ -572,13 +600,12 @@ export class WorldMap {
       audio.playSe('select');
       this._closeModal(modal);
     });
-    modal.querySelectorAll('.dispatch-confirm').forEach(btn => {
+    modal.querySelectorAll('.dispatch-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const sid = btn.dataset.sq;
+        const mode = btn.dataset.mode;
         const s = partyState.getSquad(sid);
         if (!s) return;
-        const modeInput = modal.querySelector(`input[name="mode-${sid}"]:checked`);
-        const mode = modeInput ? modeInput.value : 'manual';
         const days = getTravelDays(s.location, terr.id, WORLD_MAP);
         partyState.dispatchSquad(sid, terr.id, days, mode);
         audio.playSe('confirm');
