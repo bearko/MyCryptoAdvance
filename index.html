@@ -43,21 +43,20 @@
 
   <!-- Battle HUD -->
   <div id="battleHud" class="battle-hud hidden">
-    <div class="hud-top">
-      <div class="hud-hp">
-        <span class="hud-xp__lv" id="hudLevel">Lv.1</span>
-        <div class="hud-hp__bar"><div class="hud-hp__fill" id="hudHpFill"></div></div>
-        <span class="hud-hp__text" id="hudHpText">100 / 100</span>
-      </div>
+    <!-- Top-left: HP cluster (Lv + bar + text) -->
+    <div class="hud-hp-cluster">
+      <span class="hud-lv" id="hudLevel">Lv.1</span>
+      <div class="hud-hp__bar"><div class="hud-hp__fill" id="hudHpFill"></div></div>
+      <span class="hud-hp__text" id="hudHpText">100 / 100</span>
     </div>
-    <div class="hud-center">
-      <span class="hud-timer" id="hudTimer">0:00</span>
-    </div>
+    <!-- Below HP: stats strip -->
     <div class="hud-stats">
-      <span class="hud-remaining" id="hudRemaining">仲間 0/4</span>
-      <span class="hud-kills" id="hudKills">0 KILLS</span>
+      <span class="hud-timer" id="hudTimer">0:00</span>
+      <span class="hud-kills" id="hudKills">⚔ 0</span>
+      <span class="hud-remaining" id="hudRemaining">仲 0/4</span>
       <span class="hud-allies" id="hudAllies">×1</span>
     </div>
+    <!-- Right side, below minimap: controls -->
     <div class="hud-controls">
       <button class="hud-btn-tactic" id="btnTactic">バランスよく</button>
       <button class="hud-btn-pause" id="btnPause">⏸</button>
