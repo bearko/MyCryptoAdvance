@@ -2,94 +2,61 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-<meta name="theme-color" content="#0c0a14" />
-<title>MyCryptoAdvance — 時空英雄譚</title>
-<meta property="og:title" content="MyCryptoAdvance — 時空英雄譚" />
-<meta property="og:description" content="クリプトワールドで歴史の英雄と共に戦え" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%2250%22 font-size=%2256%22>⚔</text></svg>" />
-<link rel="stylesheet" href="css/base.css" />
-<link rel="stylesheet" href="css/layout.css" />
-<link rel="stylesheet" href="css/game.css" />
-<link rel="stylesheet" href="css/world.css" />
-<link rel="stylesheet" href="css/responsive.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1" />
+<meta name="theme-color" content="#12200f" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>MyCryptoAdvance RPG — フィールド</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><text y=%2250%22 font-size=%2256%22>🗺</text></svg>" />
+<link rel="stylesheet" href="css/rpg.css" />
 </head>
 <body>
 
-<div id="splash" class="splash">
-  <div class="splash__logo">MyCryptoAdvance</div>
-  <div class="splash__sub">時空英雄譚</div>
-  <div class="splash__loading">読み込み中…</div>
-  <div class="splash__progress"><div class="splash__bar"></div></div>
+<div id="app" class="app">
+  <canvas id="field" class="field"></canvas>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud__item"><span class="hud__coin"></span><span id="coinValue">0</span></div>
+    <div class="hud__item"><span class="hud__label">宝箱</span><span id="chestValue">0/0</span></div>
+  </div>
+
+  <!-- 調べられるときだけ出る -->
+  <div id="prompt" class="prompt"><b>A</b> しらべる</div>
+
+  <!-- 仮想スティック（左側をどこでも触ると出る） -->
+  <div id="stick" class="stick"><div id="stickKnob" class="stick__knob"></div></div>
+
+  <!-- ボタン -->
+  <div class="pad">
+    <button class="pad-btn pad-btn--b" data-button="attack" type="button">B</button>
+    <button class="pad-btn pad-btn--a" data-button="action" type="button">A</button>
+  </div>
+
+  <div id="hint" class="hint">左側ドラッグで移動　<b>A</b>しらべる　<b>B</b>攻撃</div>
+
+  <!-- ローディング＆タイトル -->
+  <div id="loading" class="overlay">
+    <div class="overlay__title">MyCryptoAdvance RPG</div>
+    <div class="overlay__sub">FIELD PROTOTYPE</div>
+    <div id="loadingText" class="overlay__text">読み込み中…</div>
+    <div class="bar"><div id="loadingBar" class="bar__fill"></div></div>
+  </div>
+
+  <div id="title" class="overlay hidden">
+    <div class="overlay__title">MyCryptoAdvance RPG</div>
+    <div class="overlay__sub">FIELD PROTOTYPE</div>
+    <p class="overlay__desc">
+      MCHウォーリアーでフィールドを歩き、<br>宝箱を探そう。
+    </p>
+    <button id="startBtn" class="start-btn" type="button">TAP TO START</button>
+    <p class="overlay__credit">
+      Hero animation: mycryptoheroes / Data・Image/HeroAnimations<br>
+      Character template: Eris Esra's Character Templates Pack
+    </p>
+  </div>
 </div>
-
-<section id="titleScreen" class="title-screen hidden">
-  <h1 class="title-screen__title">MyCryptoAdvance</h1>
-  <p class="title-screen__sub">時空英雄譚</p>
-  <p class="title-screen__desc">クリプトワールドで<br>歴史の英雄と共に侵略者を打ち倒せ</p>
-  <button id="btnPressStart" class="title-screen__press">TAP TO START</button>
-</section>
-
-<main id="gameContainer" class="game-container hidden">
-  <!-- Scene Layer (prologue) -->
-  <div id="sceneLayer" class="scene-layer">
-    <canvas id="sceneCanvas" class="scene-canvas"></canvas>
-    <div id="characterLayer" class="character-layer"></div>
-    <div id="effectLayer" class="effect-layer"></div>
-  </div>
-
-  <!-- Game Canvas (survival battle) -->
-  <canvas id="gameCanvas" class="game-canvas hidden"></canvas>
-
-  <!-- Battle HUD -->
-  <div id="battleHud" class="battle-hud hidden">
-    <!-- Top-left: HP cluster (Lv + bar + text) -->
-    <div class="hud-hp-cluster">
-      <span class="hud-lv" id="hudLevel">Lv.1</span>
-      <div class="hud-hp__bar"><div class="hud-hp__fill" id="hudHpFill"></div></div>
-      <span class="hud-hp__text" id="hudHpText">100 / 100</span>
-    </div>
-    <!-- Below HP: stats strip -->
-    <div class="hud-stats">
-      <span class="hud-timer" id="hudTimer">0:00</span>
-      <span class="hud-kills" id="hudKills">⚔ 0</span>
-      <span class="hud-remaining" id="hudRemaining">仲 0/4</span>
-      <span class="hud-allies" id="hudAllies">×1</span>
-    </div>
-    <!-- Live earned rewards (見極め用) -->
-    <div class="hud-rewards">
-      <span class="hud-reward-rank" id="hudRewardRank">D</span>
-      <span class="hud-reward-xp" id="hudRewardXp">EXP +0</span>
-      <span class="hud-reward-gold" id="hudRewardGold">💰 +0</span>
-    </div>
-    <!-- Right side, below minimap: controls -->
-    <div class="hud-controls">
-      <button class="hud-btn-tactic" id="btnTactic">バランスよく</button>
-      <button class="hud-btn-pause" id="btnPause">⏸</button>
-    </div>
-  </div>
-
-  <!-- Level Up Overlay -->
-
-  <!-- Dialogue Layer -->
-  <div id="dialogueLayer" class="dialogue-layer hidden">
-    <div class="dialogue-box">
-      <img id="dialoguePortrait" class="dialogue-portrait hidden" src="" alt="" draggable="false">
-      <div class="dialogue-content">
-        <div class="dialogue-speaker" id="dialogueSpeaker"></div>
-        <div class="dialogue-text" id="dialogueText"></div>
-      </div>
-      <div class="dialogue-indicator" id="dialogueIndicator">▼</div>
-    </div>
-  </div>
-
-  <!-- World Map / Home Base Layers -->
-  <div id="worldMapLayer" class="world-map-layer hidden"></div>
-  <div id="homeBaseLayer" class="home-base-layer hidden"></div>
-
-  <!-- Transition Overlay -->
-  <div id="transitionOverlay" class="transition-overlay hidden"></div>
-</main>
 
 <script type="module" src="js/main.js"></script>
 </body>
