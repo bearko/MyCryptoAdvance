@@ -1,8 +1,9 @@
 /* ============================================================
    input.js — 仮想スティック（スマホ）＋ キーボード（PC）
-   - スティックは画面左側のどこを触っても、その位置に出現する
-   - ボタンは別タッチで同時に押せる（マルチタッチ対応）
-   - PC はマウスドラッグでもスティックを操作できる
+
+   スティックは画面下30%の「スティック画面」に常時表示され、
+   そのエリアのどこを触ってもスティックがその位置へ移動して効く。
+   ボタンは別タッチで同時に押せる（マルチタッチ対応）。
    ============================================================ */
 
 const KEY_MAP = {
@@ -16,14 +17,14 @@ const KEY_MAP = {
 
 export class Input {
   /**
-   * @param {HTMLElement} surface スティックを受け付ける領域（通常はゲーム全体）
-   * @param {{stick: HTMLElement, knob: HTMLElement, buttons: HTMLElement[]}} els
+   * @param {{pad: HTMLElement, stick: HTMLElement, knob: HTMLElement, buttons: HTMLElement[]}} els
+   *   pad … スティックの受付エリア（下30%のペイン）
    */
-  constructor(surface, els) {
-    this.surface = surface;
+  constructor(els) {
+    this.padEl = els.pad;
     this.stickEl = els.stick;
     this.knobEl = els.knob;
-    this.radius = 46;      // スティックの可動半径(px)
+    this.radius = 52;      // スティックの可動半径(px)
     this.deadzone = 6;
 
     // タイトルなどのオーバーレイ表示中は触らせない。
@@ -65,49 +66,40 @@ export class Input {
     window.addEventListener('blur', () => { this.keys.clear(); this.held.clear(); });
   }
 
-  // --- 仮想スティック ---
-  _stickArea(x) {
-    // 画面左 62% をスティック領域にする（右側はボタン用に空ける）
-    return x < window.innerWidth * 0.62;
-  }
-
-  /** ボタンやオーバーレイの上ではスティックを起動しない */
+  /** ボタンの上ではスティックを起動しない */
   _isUiTarget(target) {
-    return !!(target && target.closest && target.closest('button, .overlay, .pad'));
+    return !!(target && target.closest && target.closest('button, .pad'));
   }
 
+  /** スティックが受付エリアからはみ出さない位置に寄せる */
+  _placeStick(clientX, clientY) {
+    const rect = this.padEl.getBoundingClientRect();
+    const half = this.stickEl.offsetWidth / 2;
+    const x = Math.min(Math.max(clientX - rect.left, half), Math.max(half, rect.width - half));
+    const y = Math.min(Math.max(clientY - rect.top, half), Math.max(half, rect.height - half));
+    this.stickEl.style.left = `${x}px`;
+    this.stickEl.style.top = `${y}px`;
+    return { x: rect.left + x, y: rect.top + y };   // 画面座標での中心
+  }
+
+  // --- 仮想スティック ---
   _bindStick() {
     const start = (id, x, y) => {
       if (!this.enabled) return false;
       if (this.pointerId !== null) return false;
-      if (!this._stickArea(x)) return false;
       this.pointerId = id;
-      this.origin.x = x;
-      this.origin.y = y;
+      this.origin = this._placeStick(x, y);
       this.stickEl.classList.add('is-active');
-      this.stickEl.style.left = `${x}px`;
-      this.stickEl.style.top = `${y}px`;
       this.knobEl.style.transform = 'translate(-50%, -50%)';
       this.axis.x = 0; this.axis.y = 0; this.magnitude = 0;
+      // 触った位置そのものをスティック中心にするので、その場で少し倒しておく
+      this._applyDelta(x - this.origin.x, y - this.origin.y);
       return true;
     };
 
     const move = (id, x, y) => {
       if (id !== this.pointerId) return;
-      let dx = x - this.origin.x;
-      let dy = y - this.origin.y;
-      const len = Math.hypot(dx, dy);
-      const vis = len > this.radius ? this.radius / len : 1;
-      this.knobEl.style.transform =
-        `translate(calc(-50% + ${dx * vis}px), calc(-50% + ${dy * vis}px))`;
-      if (len < this.deadzone) {
-        this.axis.x = 0; this.axis.y = 0; this.magnitude = 0;
-      } else {
-        const scale = Math.min(len, this.radius) / this.radius;
-        this.axis.x = (dx / len) * scale;
-        this.axis.y = (dy / len) * scale;
-        this.magnitude = scale;
-      }
+      this._applyDelta(x - this.origin.x, y - this.origin.y);
     };
 
     const end = id => {
@@ -115,17 +107,19 @@ export class Input {
       this.pointerId = null;
       this.axis.x = 0; this.axis.y = 0; this.magnitude = 0;
       this.stickEl.classList.remove('is-active');
+      this.stickEl.style.left = '';   // 定位置へ戻す
+      this.stickEl.style.top = '';
       this.knobEl.style.transform = 'translate(-50%, -50%)';
     };
 
-    this.surface.addEventListener('touchstart', e => {
+    this.padEl.addEventListener('touchstart', e => {
       for (const t of e.changedTouches) {
         if (this._isUiTarget(t.target)) continue;
         if (start(t.identifier, t.clientX, t.clientY)) e.preventDefault();
       }
     }, { passive: false });
 
-    this.surface.addEventListener('touchmove', e => {
+    this.padEl.addEventListener('touchmove', e => {
       for (const t of e.changedTouches) {
         if (t.identifier === this.pointerId) {
           e.preventDefault();
@@ -135,16 +129,32 @@ export class Input {
     }, { passive: false });
 
     const touchEnd = e => { for (const t of e.changedTouches) end(t.identifier); };
-    this.surface.addEventListener('touchend', touchEnd);
-    this.surface.addEventListener('touchcancel', touchEnd);
+    this.padEl.addEventListener('touchend', touchEnd);
+    this.padEl.addEventListener('touchcancel', touchEnd);
 
     // PC のマウスドラッグ
-    this.surface.addEventListener('mousedown', e => {
+    this.padEl.addEventListener('mousedown', e => {
       if (this._isUiTarget(e.target)) return;
       if (start('mouse', e.clientX, e.clientY)) e.preventDefault();
     });
     window.addEventListener('mousemove', e => move('mouse', e.clientX, e.clientY));
     window.addEventListener('mouseup', () => end('mouse'));
+  }
+
+  /** 中心からのズレを軸の値とノブの位置に変換する */
+  _applyDelta(dx, dy) {
+    const len = Math.hypot(dx, dy);
+    const vis = len > this.radius ? this.radius / len : 1;
+    this.knobEl.style.transform =
+      `translate(calc(-50% + ${dx * vis}px), calc(-50% + ${dy * vis}px))`;
+    if (len < this.deadzone) {
+      this.axis.x = 0; this.axis.y = 0; this.magnitude = 0;
+      return;
+    }
+    const scale = Math.min(len, this.radius) / this.radius;
+    this.axis.x = (dx / len) * scale;
+    this.axis.y = (dy / len) * scale;
+    this.magnitude = scale;
   }
 
   // --- 画面上のボタン ---
@@ -153,6 +163,7 @@ export class Input {
       const name = btn.dataset.button;
       const down = e => {
         e.preventDefault();
+        if (!this.enabled) return;
         btn.classList.add('is-down');
         if (!this.held.has(name)) this.pressed.add(name);
         this.held.add(name);

@@ -1,11 +1,14 @@
 /* ============================================================
-   game.js — メインループ / カメラ / 宝箱とのやり取り
+   game.js — メインループ / カメラ / ミニマップ / 宝箱とのやり取り
+
+   画面は3分割。上50%がゲーム画面、中20%がマップ、下30%がスティック。
+   各キャンバスはペインの実寸から毎回サイズを決める。
    ============================================================ */
 
 import { loadImage } from './assets.js';
 import { loadHeroAnimations } from './hero.js';
 import { Input } from './input.js';
-import { WorldMap } from './worldmap.js';
+import { WorldMap, MAP_W, MAP_H } from './worldmap.js';
 import { TILE } from './tiles.js';
 import { Player } from './player.js';
 import { Chest, buildChestClips } from './chest.js';
@@ -15,24 +18,39 @@ import { drawText, textWidth } from './pixelfont.js';
 const HERO_ID = 10001;
 const CHEST_COUNT = 8;
 const REACH = 24;          // 宝箱を調べられる距離(px)
-const MIN_SCALE = 2;
-const MAX_SCALE = 6;
+const MIN_ZOOM = 2;
+const MAX_ZOOM = 5;
+const ZOOM_KEY = 'mca-rpg.zoom';
 
 export class Game {
   constructor(root) {
     this.root = root;
+    this.fieldPane = root.querySelector('#fieldPane');
+    this.mapPane = root.querySelector('#mapPane');
+    this.padPane = root.querySelector('#padPane');
+
     this.canvas = root.querySelector('#field');
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
+
+    this.mini = root.querySelector('#minimap');
+    this.miniCtx = this.mini.getContext('2d');
+    this.miniCtx.imageSmoothingEnabled = false;
+    this.miniScale = 2;
+
+    this.zoomInEl = root.querySelector('#zoomIn');
+    this.zoomOutEl = root.querySelector('#zoomOut');
+    this.zoomLabelEl = root.querySelector('#zoomLabel');
+    this.promptEl = root.querySelector('#prompt');
+    this.coinEl = root.querySelector('#coinValue');
+    this.chestEl = root.querySelector('#chestValue');
+
     this.cam = { x: 0, y: 0, width: 320, height: 200 };
     this.particles = new Particles();
     this.chests = [];
     this.coins = 0;
     this.time = 0;
-    this.scale = 3;
-    this.promptEl = root.querySelector('#prompt');
-    this.coinEl = root.querySelector('#coinValue');
-    this.chestEl = root.querySelector('#chestValue');
+    this.zoom = 0;   // 0 = 未設定（初回の resize で決める）
   }
 
   async load(onProgress = () => {}) {
@@ -51,11 +69,15 @@ export class Game {
     this.player = new Player(this.heroAnim, this.map.spawn.x, this.map.spawn.y);
     this._placeChests();
 
-    this.input = new Input(this.root, {
+    this.input = new Input({
+      pad: this.padPane,
       stick: this.root.querySelector('#stick'),
       knob: this.root.querySelector('#stickKnob'),
       buttons: [...this.root.querySelectorAll('.pad-btn')],
     });
+
+    this.zoomInEl.addEventListener('click', () => this.setZoom(this.zoom + 1));
+    this.zoomOutEl.addEventListener('click', () => this.setZoom(this.zoom - 1));
 
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 120));
@@ -80,7 +102,7 @@ export class Game {
       spots.push({ x, y });
     }
     this.chests = spots.map((s, i) => {
-      const reward = 60 + Math.floor(rng() * 5) * 40 + (i === 0 ? 0 : 0);
+      const reward = 60 + Math.floor(rng() * 5) * 40;
       return new Chest(this.chestClips, s.x, s.y, reward);
     });
   }
@@ -95,29 +117,77 @@ export class Game {
     );
   }
 
+  // ---------------- 表示倍率 ----------------
+
+  _storedZoom() {
+    try {
+      const v = parseInt(localStorage.getItem(ZOOM_KEY), 10);
+      if (v >= MIN_ZOOM && v <= MAX_ZOOM) return v;
+    } catch (_) { /* 使えない環境は既定値で */ }
+    return 0;
+  }
+
+  _defaultZoom(paneHeight) {
+    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.floor(paneHeight / 220) || MIN_ZOOM));
+  }
+
+  setZoom(z) {
+    const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+    if (next === this.zoom) return;
+    this.zoom = next;
+    try { localStorage.setItem(ZOOM_KEY, String(next)); } catch (_) { /* 保存できなくても続行 */ }
+    this.resize();
+  }
+
+  _updateZoomUi() {
+    this.zoomLabelEl.textContent = `×${this.zoom}`;
+    this.zoomInEl.disabled = this.zoom >= MAX_ZOOM;
+    this.zoomOutEl.disabled = this.zoom <= MIN_ZOOM;
+  }
+
+  // ---------------- レイアウト ----------------
+
   resize() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.floor(Math.min(vw / 260, vh / 200)) || MIN_SCALE));
-    const w = Math.ceil(vw / scale);
-    const h = Math.ceil(vh / scale);
-    this.scale = scale;
-    this.canvas.width = w;
-    this.canvas.height = h;
-    this.canvas.style.width = `${w * scale}px`;
-    this.canvas.style.height = `${h * scale}px`;
+    const w = this.fieldPane.clientWidth;
+    const h = this.fieldPane.clientHeight;
+    if (!this.zoom) this.zoom = this._storedZoom() || this._defaultZoom(h);
+
+    const z = this.zoom;
+    // ドットが崩れないよう、キャンバスは常に整数倍で表示する
+    const lw = Math.max(48, Math.floor(w / z));
+    const lh = Math.max(40, Math.floor(h / z));
+    this.canvas.width = lw;
+    this.canvas.height = lh;
+    this.canvas.style.width = `${lw * z}px`;
+    this.canvas.style.height = `${lh * z}px`;
     this.ctx.imageSmoothingEnabled = false;
-    this.cam.width = w;
-    this.cam.height = h;
-    this._updateCamera();
+    this.cam.width = lw;
+    this.cam.height = lh;
+
+    this._resizeMinimap();
+    this._updateZoomUi();
+    if (this.player) this._updateCamera();
+  }
+
+  _resizeMinimap() {
+    // 左右のゲージと下のラベルを避けた範囲に収める
+    const availW = this.mapPane.clientWidth * 0.58;
+    const availH = this.mapPane.clientHeight - 20;
+    const s = Math.max(1, Math.floor(Math.min(availW / MAP_W, availH / MAP_H)));
+    this.miniScale = s;
+    this.mini.width = MAP_W * s;
+    this.mini.height = MAP_H * s;
+    this.mini.style.width = `${MAP_W * s}px`;
+    this.mini.style.height = `${MAP_H * s}px`;
+    this.miniCtx.imageSmoothingEnabled = false;
   }
 
   _updateCamera() {
     const { pixelWidth, pixelHeight } = this.map;
     const w = this.cam.width;
     const h = this.cam.height;
-    let x = this.player.x - w / 2;
-    let y = this.player.y - h / 2 - 8;
+    const x = this.player.x - w / 2;
+    const y = this.player.y - h / 2 - 8;
     this.cam.x = Math.round(pixelWidth <= w ? (pixelWidth - w) / 2 : Math.max(0, Math.min(pixelWidth - w, x)));
     this.cam.y = Math.round(pixelHeight <= h ? (pixelHeight - h) / 2 : Math.max(0, Math.min(pixelHeight - h, y)));
   }
@@ -126,6 +196,8 @@ export class Game {
   blockedByEntity(x, y, halfW, h) {
     return this.chests.some(c => c.blocks(x, y, halfW, h));
   }
+
+  // ---------------- ループ ----------------
 
   start() {
     this.input.enabled = true;   // タイトルを抜けてから入力を受け付ける
@@ -194,6 +266,8 @@ export class Game {
     }
   }
 
+  // ---------------- 描画 ----------------
+
   render() {
     const ctx = this.ctx;
     const cam = this.cam;
@@ -220,6 +294,8 @@ export class Game {
 
     this.particles.draw(ctx, cam);
     if (this.nearChest) this._drawChestMarker(ctx, cam, this.nearChest);
+
+    this._renderMinimap();
   }
 
   /** 調べられる宝箱の上に出る矢印 */
@@ -232,6 +308,39 @@ export class Game {
     ctx.fillStyle = '#ffe36a';
     for (let i = 0; i < 3; i++) ctx.fillRect(x - i, y + i, i * 2 + 1, 1);
     drawText(ctx, 'A', x - Math.round(textWidth('A') / 2), y - 8, '#fff6d0');
+  }
+
+  /** 中段のミニマップ。宝箱・現在地・いま見えている範囲を重ねる */
+  _renderMinimap() {
+    const ctx = this.miniCtx;
+    const s = this.miniScale;
+    ctx.drawImage(this.map.minimapCanvas, 0, 0, MAP_W * s, MAP_H * s);
+
+    // 宝箱（開けたものは薄く）
+    for (const c of this.chests) {
+      const x = Math.floor(c.x / TILE) * s;
+      const y = Math.floor((c.y - 1) / TILE) * s;
+      ctx.fillStyle = c.opened ? 'rgba(120, 90, 30, 0.85)' : '#ffd24a';
+      ctx.fillRect(x, y, s, s);
+    }
+
+    // いま画面に映っている範囲
+    const vx = (this.cam.x / TILE) * s;
+    const vy = (this.cam.y / TILE) * s;
+    const vw = (this.cam.width / TILE) * s;
+    const vh = (this.cam.height / TILE) * s;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(vx) + 0.5, Math.round(vy) + 0.5, Math.round(vw), Math.round(vh));
+
+    // 現在地（点滅）
+    const px = Math.round((this.player.x / TILE) * s);
+    const py = Math.round((this.player.y / TILE) * s);
+    const size = s + 2;
+    ctx.fillStyle = '#22180c';
+    ctx.fillRect(px - size / 2 - 1, py - size / 2 - 1, size + 2, size + 2);
+    ctx.fillStyle = (this.time % 900) < 560 ? '#ffffff' : '#ffd24a';
+    ctx.fillRect(px - size / 2, py - size / 2, size, size);
   }
 }
 

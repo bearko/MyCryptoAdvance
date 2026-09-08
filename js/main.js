@@ -10,7 +10,6 @@ const loadingBar = document.getElementById('loadingBar');
 const loadingText = document.getElementById('loadingText');
 const titleEl = document.getElementById('title');
 const startBtn = document.getElementById('startBtn');
-const hintEl = document.getElementById('hint');
 
 function setProgress(ratio, text) {
   loadingBar.style.width = `${Math.round(ratio * 100)}%`;
@@ -36,8 +35,8 @@ async function boot() {
     if (started) return;
     started = true;
     titleEl.classList.add('hidden');
+    game.resize();     // オーバーレイを閉じた実寸で組み直す
     game.start();
-    setTimeout(() => hintEl.classList.add('is-faded'), 6000);
   };
   startBtn.addEventListener('click', start);
   // click が抑制される環境でも始められるように
