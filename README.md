@@ -1,10 +1,13 @@
-# rpg/ — フィールド探索プロトタイプ
+# MyCryptoAdvance RPG — フィールド探索プロトタイプ
 
-ドット絵のフィールドをヒーローで歩き回るRPGの土台です。ルートにある
-「時空英雄譚」とは独立していて、`rpg/index.html` を開くだけで動きます。
+ドット絵のフィールドをヒーローで歩き回るRPGの土台です。ビルド不要の静的サイトで、
+`index.html` を配信するだけで動きます。
 
-- ローカル確認: `python3 -m http.server` などで配信して `http://localhost:8000/rpg/`
+- ローカル確認: `python3 -m http.server` などで配信して `http://localhost:8000/`
   （ES モジュールと `fetch` を使うため、`file://` では動きません）
+
+以前このリポジトリの直下にあった「時空英雄譚」は、`legacy/historical-timeslip-rpg`
+ブランチにそのまま退避しています。
 
 ## いま出来ること
 
@@ -26,7 +29,7 @@
 ## ファイル構成
 
 ```
-rpg/
+.
 ├── index.html            画面（canvas + HUD + 仮想スティック）
 ├── css/rpg.css
 ├── js/
@@ -77,46 +80,23 @@ rpg/
 
 ```bash
 pip install Pillow
-python3 rpg/tools/build_chest_sprite.py
+python3 tools/build_chest_sprite.py
 ```
 
-`rpg/assets/objects/chest.png`（256x32）と、目視確認用の `chest_preview.gif` が出ます。
+`assets/objects/chest.png`（256x32）と、目視確認用の `chest_preview.gif` が出ます。
 色や形はスクリプト上部のパレットと座標定数で調整できます。
 
 ## Vercel で確認する
 
-リポジトリをそのまま静的サイトとして配信できます（ビルド不要）。
-RPGは `/rpg/`、ルートの「時空英雄譚」は `/` に出ます。
+リポジトリ直下がそのままサイトになります（ビルド不要）。
+Vercel の New Project から Import し、Framework Preset は **Other**、
+Build Command と Output Directory は空のままで構いません。
 
-### 注意: RPGはこのブランチにしか無い
+デフォルトブランチ（`claude/historical-timeslip-rpg-SHwfw`）が本番デプロイになるので、
+本番URLの `/` を開くとこのRPGが起動します。
 
-`rpg/` があるのは `claude/rpg-hero-movement-t9z864` だけです。
-デフォルトブランチ（`claude/historical-timeslip-rpg-SHwfw`）には無いので、
-そちらから作られた本番デプロイでは `/rpg/` は 404 になります。
-
-### プレビューで見る
-
-このブランチに push すると Preview デプロイが作られます。
-Deployments 一覧は既定で Production だけ表示されることがあるので、
-Environment のフィルタを **All / Preview** にして
-`claude/rpg-hero-movement-t9z864` の行を開き、URL末尾に `/rpg/` を付けます。
-
-### 本番URLで見る
-
-次のどちらかです。
-
-- Preview デプロイの「⋯」→ **Promote to Production**（デフォルトブランチはそのまま）
-- Settings → Git → **Production Branch** をこのブランチに変更して再デプロイ
-- もしくはこのブランチをデフォルトブランチにマージする
-
-### vercel.json
-
-リポジトリ直下の `vercel.json` で `trailingSlash: true` を指定しています。
-`/rpg`（末尾スラッシュなし）で開かれると `css/rpg.css` などの相対パスが
-ルート側を指してしまうため、必ず `/rpg/` に寄せるための設定です。
-
-Vercel の **Root Directory** を `rpg` にすると `/` が直接RPGになりますが、
-その場合は時空英雄譚が配信されなくなり、直下の `vercel.json` も読まれなくなります。
+`vercel.json` では `assets/` 配下を `must-revalidate` にして、
+宝箱などの絵を差し替えたときに古いキャッシュが残らないようにしています。
 
 ## この先やるなら
 
