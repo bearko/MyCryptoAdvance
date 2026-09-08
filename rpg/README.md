@@ -83,6 +83,21 @@ python3 rpg/tools/build_chest_sprite.py
 `rpg/assets/objects/chest.png`（256x32）と、目視確認用の `chest_preview.gif` が出ます。
 色や形はスクリプト上部のパレットと座標定数で調整できます。
 
+## Vercel で確認する
+
+リポジトリをそのまま静的サイトとして配信できます（ビルド不要）。
+
+1. Vercel の New Project からこのリポジトリを Import
+2. Framework Preset は **Other**、Build Command と Output Directory は空のまま（Root Directory もリポジトリ直下）
+3. デプロイ後、RPGは `/rpg/` で開く（`/` はルートの「時空英雄譚」のまま）
+
+ブランチを push するとプレビューデプロイが作られるので、
+`https://<プロジェクト名>-git-<ブランチ名>-<アカウント>.vercel.app/rpg/` で確認できます。
+
+リポジトリ直下の `vercel.json` で `trailingSlash: true` を指定しています。
+`/rpg`（末尾スラッシュなし）で開かれると `css/rpg.css` などの相対パスが
+ルート側を指してしまうため、必ず `/rpg/` に寄せるための設定です。
+
 ## この先やるなら
 
 - 敵とエンカウント（`attack` モーションは既に読み込み済み）
