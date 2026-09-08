@@ -232,7 +232,7 @@ export class WorldMap {
   /** 見えている範囲の水だけアニメーションさせる */
   drawWater(ctx, cam, timeMs) {
     const frames = this.tileset.water;
-    const step = Math.floor(timeMs / 260);
+    const step = Math.max(0, Math.floor(timeMs / 260));
     const f = frames[step % frames.length];
     const x0 = Math.max(0, Math.floor(cam.x / TILE));
     const y0 = Math.max(0, Math.floor(cam.y / TILE));

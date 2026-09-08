@@ -128,9 +128,11 @@ export class Game {
   }
 
   start() {
+    this.input.enabled = true;   // タイトルを抜けてから入力を受け付ける
     let last = performance.now();
     const frame = now => {
-      const dt = Math.min(50, now - last);
+      // rAFの時刻が直前の performance.now() より前になることがあるので負を弾く
+      const dt = Math.max(0, Math.min(50, now - last));
       last = now;
       this.update(dt);
       this.render();

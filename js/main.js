@@ -31,12 +31,17 @@ async function boot() {
   loadingEl.classList.add('hidden');
   titleEl.classList.remove('hidden');
 
+  let started = false;
   const start = () => {
+    if (started) return;
+    started = true;
     titleEl.classList.add('hidden');
     game.start();
     setTimeout(() => hintEl.classList.add('is-faded'), 6000);
   };
-  startBtn.addEventListener('click', start, { once: true });
+  startBtn.addEventListener('click', start);
+  // click が抑制される環境でも始められるように
+  startBtn.addEventListener('touchend', e => { e.preventDefault(); start(); });
 }
 
 // iOS のダブルタップズーム防止

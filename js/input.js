@@ -26,6 +26,11 @@ export class Input {
     this.radius = 46;      // スティックの可動半径(px)
     this.deadzone = 6;
 
+    // タイトルなどのオーバーレイ表示中は触らせない。
+    // ここが true になる前にスティックが touchstart を preventDefault すると、
+    // ボタンの click が発火しなくなる（スマホでタップが効かなくなる）。
+    this.enabled = false;
+
     this.axis = { x: 0, y: 0 };
     this.magnitude = 0;
     this.pointerId = null;
@@ -45,7 +50,7 @@ export class Input {
     const norm = e => (e.key || '').toLowerCase();
     window.addEventListener('keydown', e => {
       const k = norm(e);
-      if (!(k in KEY_MAP)) return;
+      if (!this.enabled || !(k in KEY_MAP)) return;
       e.preventDefault();
       if (!this.keys.has(k)) {
         const name = KEY_MAP[k];
@@ -66,8 +71,14 @@ export class Input {
     return x < window.innerWidth * 0.62;
   }
 
+  /** ボタンやオーバーレイの上ではスティックを起動しない */
+  _isUiTarget(target) {
+    return !!(target && target.closest && target.closest('button, .overlay, .pad'));
+  }
+
   _bindStick() {
     const start = (id, x, y) => {
+      if (!this.enabled) return false;
       if (this.pointerId !== null) return false;
       if (!this._stickArea(x)) return false;
       this.pointerId = id;
@@ -109,7 +120,7 @@ export class Input {
 
     this.surface.addEventListener('touchstart', e => {
       for (const t of e.changedTouches) {
-        if (t.target.closest('.pad-btn')) continue;
+        if (this._isUiTarget(t.target)) continue;
         if (start(t.identifier, t.clientX, t.clientY)) e.preventDefault();
       }
     }, { passive: false });
@@ -129,7 +140,7 @@ export class Input {
 
     // PC のマウスドラッグ
     this.surface.addEventListener('mousedown', e => {
-      if (e.target.closest('.pad-btn')) return;
+      if (this._isUiTarget(e.target)) return;
       if (start('mouse', e.clientX, e.clientY)) e.preventDefault();
     });
     window.addEventListener('mousemove', e => move('mouse', e.clientX, e.clientY));
