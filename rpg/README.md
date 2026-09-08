@@ -86,17 +86,37 @@ python3 rpg/tools/build_chest_sprite.py
 ## Vercel で確認する
 
 リポジトリをそのまま静的サイトとして配信できます（ビルド不要）。
+RPGは `/rpg/`、ルートの「時空英雄譚」は `/` に出ます。
 
-1. Vercel の New Project からこのリポジトリを Import
-2. Framework Preset は **Other**、Build Command と Output Directory は空のまま（Root Directory もリポジトリ直下）
-3. デプロイ後、RPGは `/rpg/` で開く（`/` はルートの「時空英雄譚」のまま）
+### 注意: RPGはこのブランチにしか無い
 
-ブランチを push するとプレビューデプロイが作られるので、
-`https://<プロジェクト名>-git-<ブランチ名>-<アカウント>.vercel.app/rpg/` で確認できます。
+`rpg/` があるのは `claude/rpg-hero-movement-t9z864` だけです。
+デフォルトブランチ（`claude/historical-timeslip-rpg-SHwfw`）には無いので、
+そちらから作られた本番デプロイでは `/rpg/` は 404 になります。
+
+### プレビューで見る
+
+このブランチに push すると Preview デプロイが作られます。
+Deployments 一覧は既定で Production だけ表示されることがあるので、
+Environment のフィルタを **All / Preview** にして
+`claude/rpg-hero-movement-t9z864` の行を開き、URL末尾に `/rpg/` を付けます。
+
+### 本番URLで見る
+
+次のどちらかです。
+
+- Preview デプロイの「⋯」→ **Promote to Production**（デフォルトブランチはそのまま）
+- Settings → Git → **Production Branch** をこのブランチに変更して再デプロイ
+- もしくはこのブランチをデフォルトブランチにマージする
+
+### vercel.json
 
 リポジトリ直下の `vercel.json` で `trailingSlash: true` を指定しています。
 `/rpg`（末尾スラッシュなし）で開かれると `css/rpg.css` などの相対パスが
 ルート側を指してしまうため、必ず `/rpg/` に寄せるための設定です。
+
+Vercel の **Root Directory** を `rpg` にすると `/` が直接RPGになりますが、
+その場合は時空英雄譚が配信されなくなり、直下の `vercel.json` も読まれなくなります。
 
 ## この先やるなら
 
