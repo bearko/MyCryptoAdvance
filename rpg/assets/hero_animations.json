@@ -1,0 +1,660 @@
+{
+  "format": {
+    "template_size_note": "The folder name (e.g. 16x32) is the character size of the source template. The actual canvas of each frame is canvas_width x canvas_height, which leaves room for weapons that reach outside the character box.",
+    "sprite_sheet_layout": "Each PNG is a horizontal strip of frames, read left to right.",
+    "gif_note": "The GIF holds the same frames and can be played as-is in a browser.",
+    "direction_order": [
+      "s",
+      "se",
+      "e",
+      "ne",
+      "n",
+      "nw",
+      "w",
+      "sw"
+    ],
+    "direction_mirror": {
+      "nw": "ne",
+      "w": "e",
+      "sw": "se"
+    },
+    "file_name_rule": "<motion>_<direction>.gif / .png",
+    "scaling_note": "Pixel art. Scale with nearest neighbor (image-rendering: pixelated), never bicubic."
+  },
+  "directions": [
+    {
+      "key": "s",
+      "label": {
+        "ja": "下",
+        "en": "South"
+      },
+      "vector": [
+        0,
+        1
+      ]
+    },
+    {
+      "key": "se",
+      "label": {
+        "ja": "右下",
+        "en": "South East"
+      },
+      "vector": [
+        1,
+        1
+      ]
+    },
+    {
+      "key": "e",
+      "label": {
+        "ja": "右",
+        "en": "East"
+      },
+      "vector": [
+        1,
+        0
+      ]
+    },
+    {
+      "key": "ne",
+      "label": {
+        "ja": "右上",
+        "en": "North East"
+      },
+      "vector": [
+        1,
+        -1
+      ]
+    },
+    {
+      "key": "n",
+      "label": {
+        "ja": "上",
+        "en": "North"
+      },
+      "vector": [
+        0,
+        -1
+      ]
+    },
+    {
+      "key": "nw",
+      "label": {
+        "ja": "左上",
+        "en": "North West"
+      },
+      "vector": [
+        -1,
+        -1
+      ]
+    },
+    {
+      "key": "w",
+      "label": {
+        "ja": "左",
+        "en": "West"
+      },
+      "vector": [
+        -1,
+        0
+      ]
+    },
+    {
+      "key": "sw",
+      "label": {
+        "ja": "左下",
+        "en": "South West"
+      },
+      "vector": [
+        -1,
+        1
+      ]
+    }
+  ],
+  "heroes": [
+    {
+      "hero_id": 10001,
+      "hero_name": {
+        "en": "MCH Warrior",
+        "ja": "MCHウォーリアー",
+        "zh": "MCH战士"
+      },
+      "hero_image_file_path": "Image/Heroes/10001.png",
+      "template_size": "16x32",
+      "canvas_width": 32,
+      "canvas_height": 32,
+      "directory": "heroes/16x32/10001",
+      "motions": [
+        {
+          "key": "attack",
+          "label": {
+            "ja": "攻撃",
+            "en": "Attack"
+          },
+          "directions": [
+            "s",
+            "se",
+            "e",
+            "ne",
+            "n"
+          ],
+          "mirrored_directions": [
+            {
+              "direction": "nw",
+              "mirror_of": "ne"
+            },
+            {
+              "direction": "w",
+              "mirror_of": "e"
+            },
+            {
+              "direction": "sw",
+              "mirror_of": "se"
+            }
+          ],
+          "frame_count": 7,
+          "clips": [
+            {
+              "direction": "s",
+              "frame_count": 7,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                200,
+                50,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 750,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/attack_s.png",
+                "width": 224,
+                "height": 32,
+                "columns": 7,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "se",
+              "frame_count": 7,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                200,
+                50,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 750,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/attack_se.png",
+                "width": 224,
+                "height": 32,
+                "columns": 7,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "e",
+              "frame_count": 7,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                200,
+                50,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 750,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/attack_e.png",
+                "width": 224,
+                "height": 32,
+                "columns": 7,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "ne",
+              "frame_count": 7,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                200,
+                50,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 750,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/attack_ne.png",
+                "width": 224,
+                "height": 32,
+                "columns": 7,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "n",
+              "frame_count": 7,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                200,
+                50,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 750,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/attack_n.png",
+                "width": 224,
+                "height": 32,
+                "columns": 7,
+                "rows": 1
+              }
+            }
+          ]
+        },
+        {
+          "key": "idle",
+          "label": {
+            "ja": "待機",
+            "en": "Idle"
+          },
+          "directions": [
+            "s",
+            "se",
+            "e",
+            "ne",
+            "n",
+            "nw",
+            "w",
+            "sw"
+          ],
+          "mirrored_directions": [],
+          "frame_count": 4,
+          "clips": [
+            {
+              "direction": "s",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_s.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "se",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_se.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "e",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_e.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "ne",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_ne.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "n",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_n.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "nw",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_nw.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "w",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_w.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "sw",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/idle_sw.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            }
+          ]
+        },
+        {
+          "key": "walk",
+          "label": {
+            "ja": "歩行",
+            "en": "Walk"
+          },
+          "directions": [
+            "s",
+            "se",
+            "e",
+            "ne",
+            "n",
+            "nw",
+            "w",
+            "sw"
+          ],
+          "mirrored_directions": [],
+          "frame_count": 4,
+          "clips": [
+            {
+              "direction": "s",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_s.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "se",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_se.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "e",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_e.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "ne",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_ne.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "n",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_n.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "nw",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_nw.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "w",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_w.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            },
+            {
+              "direction": "sw",
+              "frame_count": 4,
+              "frame_width": 32,
+              "frame_height": 32,
+              "durations_ms": [
+                100,
+                100,
+                100,
+                100
+              ],
+              "total_duration_ms": 400,
+              "loop": true,
+              "sprite_sheet": {
+                "image_file_path": "heroes/16x32/10001/walk_sw.png",
+                "width": 128,
+                "height": 32,
+                "columns": 4,
+                "rows": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
