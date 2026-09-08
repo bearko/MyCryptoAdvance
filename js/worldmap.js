@@ -10,6 +10,20 @@ export const MAP_H = 48;
 const BORDER = 2;
 const FOAM = '#a8d8f0';
 
+/** ミニマップ1pxの色 */
+const MINIMAP_COLORS = {
+  [T.GRASS]: '#4b9247',
+  [T.GRASS_FLOWER]: '#54a04f',
+  [T.TALL_GRASS]: '#41853f',
+  [T.PATH]: '#c2a276',
+  [T.SAND]: '#e3cf9c',
+  [T.WATER]: '#2f6ea6',
+  [T.TREE]: '#276b36',
+  [T.BUSH]: '#3c8a45',
+  [T.ROCK]: '#8d919b',
+  [T.CLIFF]: '#7a6550',
+};
+
 function valueNoise(seed) {
   const rng = mulberry32(seed);
   const size = 64;
@@ -37,6 +51,7 @@ export class WorldMap {
     this.tileset = buildTileset(seed);
     this._generate();
     this._bakeGround();
+    this._bakeMinimap();
     this._collectObjects();
   }
 
@@ -193,6 +208,18 @@ export class WorldMap {
         }
       }
     }
+  }
+
+  /** 1タイル=1pxのミニマップを焼く（表示側で整数倍に拡大する） */
+  _bakeMinimap() {
+    const { canvas, ctx } = makeCanvas(MAP_W, MAP_H);
+    for (let ty = 0; ty < MAP_H; ty++) {
+      for (let tx = 0; tx < MAP_W; tx++) {
+        ctx.fillStyle = MINIMAP_COLORS[this.get(tx, ty)] || MINIMAP_COLORS[T.GRASS];
+        ctx.fillRect(tx, ty, 1, 1);
+      }
+    }
+    this.minimapCanvas = canvas;
   }
 
   /** 木・岩・茂みを y ソート用のリストにする */
